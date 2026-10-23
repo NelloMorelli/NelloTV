@@ -622,16 +622,7 @@ class MainActivity : ComponentActivity(), Host {
             Spec("sport_done", "Risultati", RowKind.MIXED, mixed = {
                 sortByTime(today.await().filter { it.state == "post" } + f1Today.await().filter { it.state == "post" })
             }),
-            Spec("sport_apps", "App sport", RowKind.APPS, apps = {
-                apps.get(listOf(
-                    "com.dazn", PrimeVideo.PKG, "it.mediaset.infinitytv1",
-                    // NeroZone, sport and IPTV apps
-                    "iptv.apupl",
-                    "com.sportzx.live", "com.vegetatv.app",
-                    "ar.tvplayer.tv", "com.nst.iptvsmarterstvbox", "com.iptvstreamsolutions.iptvplus",
-                    "com.myiptvonline.implayer", "studio.scillarium.ottnavigator",
-                ))
-            }),
+            Spec("sport_apps", "App sport", RowKind.APPS, apps = { apps.get(apps.sportApps) }),
         )
     }
 
@@ -781,7 +772,8 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun goTop() {
         page.glideTo(0)
-        rowsView.smoothScrollToPosition(0)
+        // direct jump: smoothScrollToPosition(0) moved this list the wrong way
+        (rowsView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)?.scrollToPositionWithOffset(0, 0)
         tabs[current.ordinal].requestFocus()
     }
 
@@ -917,7 +909,12 @@ class MainActivity : ComponentActivity(), Host {
                 Row("s_series", "Serie TV", RowKind.LANDSCAPE, media = series.await()).takeIf { it.size > 0 },
             )
         }
-        if (current == Section.SEARCH) adapter.submit(searchRows)
+        if (current == Section.SEARCH) {
+            adapter.submit(searchRows)
+            // new results: start from the first row (it was left scrolled off the top)
+            rowsView.scrollToPosition(0)
+            rowsView.post { (rowsView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)?.scrollToPositionWithOffset(0, 0) }
+        }
     }
 
     // ---------------------------------------------------------------- single screen
@@ -1610,12 +1607,40 @@ class MainActivity : ComponentActivity(), Host {
                 } else replaceInDock(app)
             }
         }
+        // the Sport tab's app grid, editable from anywhere
+        if (app.pkg != Apps.SETTINGS) {
+            val inSport = app.pkg in apps.sportApps
+            p.button(if (inSport) "Rimuovi da App sport" else "Aggiungi ad App sport") {
+                val gridIndex = bentoTiles().indexOfFirst { it.contentDescription == app.label }
+                apps.sportApps = if (inSport) apps.sportApps - app.pkg else apps.sportApps + app.pkg
+                toast(if (inSport) "${app.label} rimossa da App sport" else "${app.label} aggiunta ad App sport")
+                refreshSportApps(keepFocusAt = gridIndex)
+            }
+        }
         if (app.pkg != Apps.SETTINGS) p.button("Nascondi app") {
             apps.hide(app.pkg)
             toast("${app.label} nascosta · la trovi in \"App nascoste\"")
             rebuildExplore()
         }
         p.showSpotlight(page, appHero(app), 272, 153)
+    }
+
+    /** Update the Sport tab's "App sport" grid in place. */
+    private fun bentoTiles(): List<View> =
+        (0 until bento.childCount).flatMap { r -> (bento.getChildAt(r) as android.view.ViewGroup).let { row -> (0 until row.childCount).map { row.getChildAt(it) } } }
+
+    private fun refreshSportApps(keepFocusAt: Int = -1) {
+        val state = states[Section.SPORT] ?: return
+        val row = state.rows.firstOrNull { it.key == "sport_apps" } ?: return
+        row.apps = apps.get(apps.sportApps)
+        if (current == Section.SPORT) {
+            shownBento = null
+            bindBelow(state)
+            // the grid was rebuilt: stay on the same spot (the next app, or the previous one at the end)
+            if (keepFocusAt >= 0) bento.postDelayed({
+                bentoTiles().let { t -> t.getOrNull(keepFocusAt.coerceAtMost(t.size - 1))?.requestFocus() }
+            }, 150)
+        }
     }
 
     /** Dock full: pick which of the 5 apps [app] replaces. */

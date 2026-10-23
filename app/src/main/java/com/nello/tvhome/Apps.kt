@@ -20,6 +20,13 @@ class Apps(private val context: Context) {
 
         /** the dock: at most [DOCK_MAX] apps */
         const val DOCK_MAX = 5
+        val DEFAULT_SPORT_APPS = listOf(
+            "com.dazn", "com.amazon.firebat", "it.mediaset.infinitytv1",
+            // NeroZone, sport and IPTV apps
+            "iptv.apupl", "com.sportzx.live", "com.vegetatv.app",
+            "ar.tvplayer.tv", "com.nst.iptvsmarterstvbox", "com.iptvstreamsolutions.iptvplus",
+            "com.myiptvonline.implayer", "studio.scillarium.ottnavigator",
+        )
         val DEFAULT_SPORT_DOCK = listOf(
             "com.dazn",
             "iptv.apupl",
@@ -146,6 +153,16 @@ class Apps(private val context: Context) {
     } catch (e: Exception) {
         false
     }
+
+    /** "App sport" grid in the Sport tab: editable from any app's menu. */
+    var sportApps: List<String>
+        get() = prefs.getString("sport_apps", null)?.split(",")?.filter { it.isNotBlank() } ?: DEFAULT_SPORT_APPS
+        set(value) {
+            // the original sport apps keep their original order; apps you add go after them
+            val v = value.distinct()
+            val ordered = DEFAULT_SPORT_APPS.filter { it in v } + v.filter { it !in DEFAULT_SPORT_APPS }
+            prefs.edit().putString("sport_apps", ordered.joinToString(",")).apply()
+        }
 
     /** The dock's apps, in order (max [DOCK_MAX]). The Sport tab has its own dock. */
     fun dock(sport: Boolean = false): List<String> {
