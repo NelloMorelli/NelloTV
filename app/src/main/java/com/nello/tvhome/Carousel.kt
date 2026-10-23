@@ -149,7 +149,7 @@ class CarouselAdapter(
             }
         }.apply {
             textSize = 92f
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            typeface = Fonts.semiBold
             includeFontPadding = false
             letterSpacing = -0.06f
             setShadowLayer(18f, 0f, 4f, 0x99000000.toInt())
@@ -176,7 +176,7 @@ class CarouselAdapter(
         private val art = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP; visibility = View.INVISIBLE }
         private val chip = TextView(ctx).apply {
             textSize = 12f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = Fonts.medium
             setTextColor(Color.WHITE)
             setPadding(px(10), px(4), px(10), px(4))
             visibility = View.GONE
@@ -248,7 +248,7 @@ class CarouselAdapter(
                 val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
                 rTitle = TextView(ctx).apply {
                     textSize = 22f
-                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    typeface = Fonts.semiBold
                     setTextColor(Color.WHITE)
                 }
                 rSession = TextView(ctx).apply {
@@ -295,7 +295,7 @@ class CarouselAdapter(
                 head.addView(tvLogo, LinearLayout.LayoutParams(px(44), px(26)).apply { marginEnd = px(6) })
                 tvChannel = TextView(ctx).apply {
                     textSize = 13f
-                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    typeface = Fonts.medium
                     setTextColor(Color.WHITE)
                 }
                 head.addView(tvChannel)
@@ -304,7 +304,7 @@ class CarouselAdapter(
                 tvTitle = TextView(ctx).apply {
                     textSize = 19f
                     maxLines = 2
-                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    typeface = Fonts.semiBold
                     setTextColor(Color.WHITE)
                     setShadowLayer(8f, 0f, 1f, 0xCC000000.toInt())
                 }
@@ -469,7 +469,7 @@ class CarouselAdapter(
             mAwayLogo = away.first; mAway = away.second
             mCenter = TextView(ctx).apply {
                 textSize = 20f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                typeface = Fonts.medium
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
             }

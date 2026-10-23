@@ -144,7 +144,7 @@ abstract class GlassPage : ComponentActivity() {
             this.text = text
             textSize = 24f
             setTextColor(0xFFFFFFFF.toInt())
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = Fonts.medium
             setPadding(dp(14), 0, dp(14), 0)
         })
         if (subtitle != null) list.addView(TextView(this).apply {

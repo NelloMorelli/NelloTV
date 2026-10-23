@@ -59,7 +59,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
         body.addView(TextView(context).apply {
             this.text = text
             textSize = 16f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = Fonts.medium
             setTextColor(0xFFFFFFFF.toInt())
             setPadding(px(6), 0, px(6), 0)
         })
@@ -85,7 +85,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
         col.addView(TextView(context).apply {
             text = state
             textSize = 17f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = Fonts.medium
             setTextColor(0xFFFFFFFF.toInt())
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -159,7 +159,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
                     setSize(px(7), px(7))
                 }, null)
                 compoundDrawablePadding = px(10)
-                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                typeface = Fonts.medium
             }
             textSize = 14f
             isFocusable = true

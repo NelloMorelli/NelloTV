@@ -901,7 +901,7 @@ class MainActivity : ComponentActivity(), Host {
             val sel = i == section.ordinal
             t.isSelected = sel
             if (t.typeface?.isBold == true || t.tag == null) {
-                t.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                t.typeface = Fonts.medium
                 t.tag = "styled"
             }
             val to = if (sel) 0xFFFFFFFF.toInt() else 0x99FFFFFF.toInt()

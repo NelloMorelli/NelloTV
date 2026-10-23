@@ -138,19 +138,21 @@ class Notifier(private val service: AccessibilityService) {
             addView(TextView(service).apply {
                 this.text = title
                 textSize = 17f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                typeface = Fonts.medium
                 setTextColor(0xFFFFFFFF.toInt())
                 maxLines = 1
             })
             addView(TextView(service).apply {
                 this.text = text
                 textSize = 13f
+                typeface = Fonts.regular
                 setTextColor(0xCCFFFFFF.toInt())
                 maxLines = 2
             })
             addView(TextView(service).apply {
                 this.text = hint
                 textSize = 12f
+                typeface = Fonts.regular
                 setTextColor(0x99FFFFFF.toInt())
                 setPadding(0, dp(4), 0, 0)
             })

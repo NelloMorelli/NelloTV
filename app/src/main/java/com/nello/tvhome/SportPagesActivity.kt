@@ -81,7 +81,7 @@ class SportPagesActivity : GlassPage() {
                 if (i == 0) setPadding(0, 0, dp(12), 0)
                 if (header) setTextColor(getColor(R.color.text_faint))
                 else setTextColor(0xF2FFFFFF.toInt())
-                if (highlight) typeface = android.graphics.Typeface.DEFAULT_BOLD
+                if (highlight) typeface = Fonts.semiBold
             }, if (widths[i] == 0) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(dp(widths[i]), -2))
         }
         list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(1) })

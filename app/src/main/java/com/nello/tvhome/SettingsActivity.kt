@@ -106,7 +106,7 @@ class SettingsActivity : ComponentActivity() {
         val title = TextView(this).apply {
             text = "Impostazioni"
             textSize = 30f
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            typeface = Fonts.medium
             setTextColor(0xFFFFFFFF.toInt())
         }
         val clock = TextClock(this).apply {
