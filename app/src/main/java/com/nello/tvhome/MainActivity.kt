@@ -117,13 +117,22 @@ class MainActivity : ComponentActivity(), Host {
         val tabs = findViewById<View>(R.id.tabGroup)
         val bar = findViewById<View>(R.id.rightBar)
         val loc = IntArray(2)
+        val glyphs = android.graphics.Rect()
         fun place() {
             if (clock.width == 0 || bar.width == 0) return
-            tabs.getLocationInWindow(loc); val tabsRight = loc[0] + tabs.width
+            // what the eye sees: the end of the last visible tab's text (not its padding)…
+            val last = (0 until (tabs as ViewGroup).childCount).map { tabs.getChildAt(it) }.lastOrNull { it.visibility == View.VISIBLE } as? TextView ?: return
+            last.getLocationInWindow(loc)
+            val textRight = loc[0] + last.width - last.paddingEnd -
+                ((last.width - last.paddingStart - last.paddingEnd) - last.paint.measureText(last.text.toString())) / 2f
+            // …the pill's border…
             bar.getLocationInWindow(loc); val barLeft = loc[0]
+            // …and the digits' ink, not the text box
+            val tc = clock as TextView
+            tc.paint.getTextBounds(tc.text.toString(), 0, tc.text.length, glyphs)
+            val inkCenter = tc.paddingLeft + (glyphs.left + glyphs.right) / 2f
             (clock.parent as View).getLocationInWindow(loc); val parentLeft = loc[0]
-            val target = (tabsRight + barLeft) / 2f - parentLeft - clock.width / 2f
-            clock.translationX = target - clock.left
+            clock.translationX = (textRight + barLeft) / 2f - parentLeft - clock.left - inkCenter
         }
         val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
         tabs.addOnLayoutChangeListener(listener)
