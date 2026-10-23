@@ -139,27 +139,47 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     }
 
     /** Label/icon colour follows how much of the white pill is under it. */
+    /** Labels keep their own colours; the dark "ink" under the pill is a mask (see dispatchDraw). */
     private fun updateInk() {
         for (child in buttons()) {
-            val overlap = (minOf(pill.right, child.right.toFloat()) - maxOf(pill.left, child.left.toFloat()))
-                .coerceAtLeast(0f) / child.width.coerceAtLeast(1)
-            val ink = overlap * strength * visibleAmount
-            when (child) {
-                is TextView -> child.setTextColor(blend(if (child.isSelected) 0xFFFFFFFF.toInt() else 0xB3FFFFFF.toInt(), 0xFF111111.toInt(), ink))
-                is ViewGroup -> (0 until child.childCount).map { child.getChildAt(it) }.filterIsInstance<StatusIcon>().forEach { it.ink = ink }
-            }
+            if (child is ViewGroup) (0 until child.childCount).map { child.getChildAt(it) }.filterIsInstance<StatusIcon>().forEach { it.ink = 0f }
         }
     }
 
+    // dark ink at full strength even for dimmed (60% white) labels: colour → #111, alpha × 2.5
+    private val inkPaint = Paint().apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+            0f, 0f, 0f, 0f, 17f,
+            0f, 0f, 0f, 0f, 17f,
+            0f, 0f, 0f, 0f, 17f,
+            0f, 0f, 0f, 2.5f, 0f,
+        ))
+    }
+    private val clip = android.graphics.Path()
+
     override fun dispatchDraw(canvas: Canvas) {
-        if (visibleAmount > 0.01f && pill.width() > 0f) {
+        val r = 20 * dp
+        val showPill = visibleAmount > 0.01f && pill.width() > 0f
+        if (showPill) {
             // faint white when only "selected", solid white when focused
             val alpha = (0x2E + (0xF2 - 0x2E) * strength) * visibleAmount
             paint.color = (alpha.toInt().coerceIn(0, 255) shl 24) or 0xFFFFFF
-            val r = 20 * dp
             canvas.drawRoundRect(pill.left, 0f, pill.right, height.toFloat(), r, r, paint)
         }
         super.dispatchDraw(canvas)
+        // the labels again, dark, but only inside the white pill: as it slides, each letter turns
+        // dark exactly where the pill covers it
+        val ink = strength * visibleAmount
+        if (showPill && ink > 0.01f) {
+            inkPaint.alpha = (ink * 255).toInt()
+            clip.reset()
+            clip.addRoundRect(pill.left, 0f, pill.right, height.toFloat(), r, r, android.graphics.Path.Direction.CW)
+            val save = canvas.save()
+            canvas.clipPath(clip)
+            canvas.saveLayer(pill.left, 0f, pill.right, height.toFloat(), inkPaint)
+            super.dispatchDraw(canvas)
+            canvas.restoreToCount(save)
+        }
     }
 
     private fun blend(a: Int, b: Int, t: Float): Int {

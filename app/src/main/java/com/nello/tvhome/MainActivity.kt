@@ -729,10 +729,25 @@ class MainActivity : ComponentActivity(), Host {
         if (isSingle(section)) listOfNotNull(catalogLabel, carousel, carouselTitle, carouselMeta, below, findViewById<View>(R.id.dock).takeIf { dockChanges })
         else listOf(hero, rowsView)
 
+    /**
+     * The current tab is full white, the others dimmed — colour only, no bold (bold changed the
+     * label's width and made the row jump). The colour change is a short crossfade.
+     */
     private fun styleTabs(section: Section) {
         tabs.forEachIndexed { i, t ->
-            t.isSelected = i == section.ordinal
-            t.typeface = android.graphics.Typeface.create("sans-serif-medium", if (t.isSelected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            val sel = i == section.ordinal
+            t.isSelected = sel
+            if (t.typeface?.isBold == true || t.tag == null) {
+                t.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                t.tag = "styled"
+            }
+            val to = if (sel) 0xFFFFFFFF.toInt() else 0x99FFFFFF.toInt()
+            val from = t.currentTextColor
+            if (from != to) android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), from, to).apply {
+                duration = 480
+                addUpdateListener { a -> t.setTextColor(a.animatedValue as Int) }
+                start()
+            }
         }
         findViewById<FocusGroup>(R.id.tabGroup).refresh()
     }
