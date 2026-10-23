@@ -31,7 +31,18 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         zoomOnFocus = false
         addView(scroller, ViewGroup.LayoutParams(-1, -2))
     }
-    private val window = PopupWindow(card, px(widthDp), ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+    /** set while the spotlight is open: closing plays its exit animation first */
+    private var exitAnimation: ((done: () -> Unit) -> Unit)? = null
+
+    private val window = object : PopupWindow(card, px(widthDp), ViewGroup.LayoutParams.WRAP_CONTENT, true) {
+        private var closing = false
+        override fun dismiss() {
+            val exit = exitAnimation
+            if (exit == null || closing) return super.dismiss()
+            closing = true
+            exit { super.dismiss() }
+        }
+    }.apply {
         setBackgroundDrawable(ColorDrawable(0))
         elevation = 24 * dp
         animationStyle = android.R.style.Animation_Dialog
@@ -146,10 +157,14 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         // posters are hardware bitmaps, so the screen is captured with PixelCopy rather than View.draw
         val activity = context as android.app.Activity
         val shot = android.graphics.Bitmap.createBitmap(480, 270, android.graphics.Bitmap.Config.ARGB_8888)
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
         android.view.PixelCopy.request(activity.window, shot, { result ->
-            val blur = if (result == android.view.PixelCopy.SUCCESS) GlassView.makeBlur(shot) else GlassView.blurred
-            openSpotlight(screen, hero, heroWidthDp, heroHeightDp, blur)
-        }, android.os.Handler(android.os.Looper.getMainLooper()))
+            // blur off the main thread, so the opening animation isn't stalled
+            Thread {
+                val blur = if (result == android.view.PixelCopy.SUCCESS) GlassView.makeBlur(shot) else GlassView.blurred
+                main.post { openSpotlight(screen, hero, heroWidthDp, heroHeightDp, blur) }
+            }.start()
+        }, main)
     }
 
     private fun openSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int, blur: android.graphics.Bitmap?) {
@@ -173,9 +188,54 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         window.width = ViewGroup.LayoutParams.MATCH_PARENT
         window.height = ViewGroup.LayoutParams.MATCH_PARENT
         window.elevation = 0f
-        window.animationStyle = android.R.style.Animation_Toast
+        // the animation is ours (below), not the window's
+        window.animationStyle = 0
         window.showAtLocation(screen, Gravity.NO_GRAVITY, 0, 0)
         focusFirst()
+
+        // entrance, ease-out (durations doubled: the Fire TV runs animations at 0.5x).
+        // Start state now, motion on the frame after the window is first drawn.
+        val easeOut = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
+        val bg = root.background
+        bg.alpha = 0
+        hero.alpha = 0f
+        hero.scaleX = 0.82f
+        hero.scaleY = 0.82f
+        hero.translationY = px(24).toFloat()
+        card.alpha = 0f
+        card.translationY = px(36).toFloat()
+        root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                root.viewTreeObserver.removeOnPreDrawListener(this)
+                root.postOnAnimation {
+                    android.animation.ValueAnimator.ofInt(0, 255).apply {
+                        duration = 480
+                        interpolator = easeOut
+                        addUpdateListener { bg.alpha = it.animatedValue as Int }
+                        start()
+                    }
+                    hero.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                        .setDuration(700).setInterpolator(easeOut).start()
+                    card.animate().alpha(1f).translationY(0f)
+                        .setStartDelay(140).setDuration(700).setInterpolator(easeOut).start()
+                }
+                return true
+            }
+        })
+
+        // exit: quick fade, slightly shrinking
+        exitAnimation = { done ->
+            val easeIn = android.view.animation.AccelerateInterpolator(1.5f)
+            android.animation.ValueAnimator.ofInt(bg.alpha, 0).apply {
+                duration = 300
+                interpolator = easeIn
+                addUpdateListener { bg.alpha = it.animatedValue as Int }
+                start()
+            }
+            card.animate().alpha(0f).translationY(px(16).toFloat()).setStartDelay(0).setDuration(260).setInterpolator(easeIn).start()
+            hero.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(300).setInterpolator(easeIn)
+                .withEndAction { done() }.start()
+        }
     }
 
     fun dismiss() {
