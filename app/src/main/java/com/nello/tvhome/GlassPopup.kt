@@ -53,7 +53,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
 
     var onDismiss: (() -> Unit)? = null
 
-    val isShowing get() = window.isShowing
+    val isShowing get() = window.isShowing || overlay != null
 
     fun title(text: String, subtitle: String? = null) = apply {
         body.addView(TextView(context).apply {
@@ -199,106 +199,136 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
         return b
     }
 
+    // ---------------------------------------------------------------- under a button: in-screen
+    // No separate window (its first frame alone takes ~100 ms): the card is an overlay inside the
+    // launcher's own screen, so the pill starts moving on the very frame OK is pressed. Focus is
+    // kept inside the overlay, Back closes it.
+
+    private val widthPx = px(widthDp)
+    private var overlay: android.widget.FrameLayout? = null
+    private var closing = false
+
     /** Opens under [anchor], right-aligned with it when [alignEnd]. */
     fun showUnder(anchor: View, alignEnd: Boolean = true) {
-        prepare()
+        val activity = context as? android.app.Activity ?: return
+        val content = activity.findViewById<ViewGroup>(android.R.id.content)
         this.anchor = anchor
-        // the window starts at the button's top: the card is drawn from the button down to its place
+        val a = IntArray(2).also { anchor.getLocationInWindow(it) }
+        val c = IntArray(2).also { content.getLocationInWindow(it) }
+        val ax = a[0] - c[0]; val ay = a[1] - c[1]
+        // the card's area starts at the button's top: the pill grows down from there into place
         val gapTop = anchor.height + px(10)
         card.contentTop = gapTop
         (scroller.layoutParams as android.widget.FrameLayout.LayoutParams).topMargin = gapTop
-        card.measure(View.MeasureSpec.makeMeasureSpec(window.width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
-        val loc = IntArray(2)
-        anchor.getLocationOnScreen(loc)
-        val available = context.resources.displayMetrics.heightPixels - loc[1] - px(24)
-        window.height = if (card.measuredHeight > available) available else ViewGroup.LayoutParams.WRAP_CONTENT
-        window.animationStyle = 0
-        window.elevation = 0f
-        val x = if (alignEnd) anchor.width - window.width else 0
-        window.showAsDropDown(anchor, x, -anchor.height)
+        card.measure(View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
+        val available = content.height - ay - px(24)
+        val height = minOf(card.measuredHeight, available)
+        val left = if (alignEnd) ax + anchor.width - widthPx else ax
+        val root = object : android.widget.FrameLayout(context) {
+            // focus never leaves the card
+            override fun focusSearch(focused: View?, direction: Int): View? {
+                val next = super.focusSearch(focused, direction)
+                return if (next != null && isInside(next)) next else focused
+            }
+            private fun isInside(v: View): Boolean {
+                var p: android.view.ViewParent? = v.parent
+                while (p != null) { if (p === this) return true; p = p.parent }
+                return false
+            }
+            override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                    if (event.action == android.view.KeyEvent.ACTION_UP) closeToAnchor()
+                    return true
+                }
+                return super.dispatchKeyEvent(event)
+            }
+        }
+        root.clipChildren = false
+        (card.parent as? ViewGroup)?.removeView(card)
+        root.addView(card, android.widget.FrameLayout.LayoutParams(widthPx, height).apply {
+            leftMargin = left.coerceAtLeast(px(8)); topMargin = ay
+        })
+        content.addView(root, ViewGroup.LayoutParams(-1, -1))
+        overlay = root
         focusFirst()
-        pourFrom(anchor, alignEnd)
+        morphFrom(anchor)
     }
 
-    // ---------------------------------------------------------------- liquid open / close
-    // The pill turns into the pop-up. Frame one is an exact copy of the focused button (its white
-    // and its icon, from a snapshot), so nothing jumps when the window appears; then a single
-    // continuous motion stretches it into the card while the white slowly melts into glass and the
-    // icon fades in the corner it rides along. Closing runs it backwards and ends on the button.
+    // ---------------------------------------------------------------- the morph
+    // The pill itself turns into the pop-up. The card is laid out complete from the start and the
+    // pill's shape — a GPU outline clip, nothing redrawn — opens up over it: first it's exactly the
+    // focused button (white, dark icon), then it stretches into the card, the white melting into
+    // glass in the first third, revealing the content as it grows. Closing folds it back.
 
-    private val morph = android.view.animation.PathInterpolator(0.32f, 0.72f, 0.0f, 1f)
+    private val open = android.view.animation.PathInterpolator(0.2f, 0.9f, 0.1f, 1f)
+    private val fold = android.view.animation.PathInterpolator(0.45f, 0f, 0.2f, 1f)
     private var shapeAnim: android.animation.ValueAnimator? = null
     private var from = android.graphics.RectF()
     private var fromRadius = 0f
+    private val shapeRect = android.graphics.RectF()
 
     private fun shapeAt(t: Float) {
-        val to = android.graphics.RectF(0f, card.contentTop.toFloat(), card.width.toFloat(), card.height.toFloat())
-        val k = morph.getInterpolation(t)
-        // the bottom runs a touch ahead of the sides: it reads as flowing out of the pill
-        val kb = morph.getInterpolation((t * 1.12f).coerceAtMost(1f))
+        val toTop = card.contentTop.toFloat()
+        val k = t
+        // the bottom runs a little ahead of the sides, like something poured
+        val kb = (t * 1.15f).coerceAtMost(1f)
         fun mix(a: Float, b: Float, x: Float) = a + (b - a) * x
-        val shape = android.graphics.RectF(mix(from.left, to.left, k), mix(from.top, to.top, k), mix(from.right, to.right, k), mix(from.bottom, to.bottom, kb))
-        card.shape = shape
-        card.shapeRadius = mix(fromRadius, card.radius, k)
-        // white → glass over the first 35%, smoothly (glass by the time it's big)
-        val w = (1f - t / 0.35f).coerceIn(0f, 1f)
-        card.whiteness = w * w * (3 - 2 * w)
-        // the icon stays pinned to the shape's corner on the button's side, fading out early
-        card.iconAlpha = (1f - t / 0.25f).coerceIn(0f, 1f)
-        card.iconRect.set(shape.right - from.width(), shape.top, shape.right, shape.top + from.height())
+        shapeRect.set(mix(from.left, 0f, k), mix(from.top, toTop, k), mix(from.right, card.width.toFloat(), k), mix(from.bottom, card.height.toFloat(), kb))
+        val w = (1f - t / 0.3f).coerceIn(0f, 1f)
+        card.setMorph(shapeRect, mix(fromRadius, card.radius, k), w * w * (3 - 2 * w), (1f - t / 0.2f).coerceIn(0f, 1f), from)
+        // content shows through as the glass forms
+        scroller.alpha = ((t - 0.25f) / 0.45f).coerceIn(0f, 1f)
     }
 
-    private fun pourFrom(anchor: View, @Suppress("UNUSED_PARAMETER") alignEnd: Boolean) {
-        scroller.alpha = 0f
-        card.shape = android.graphics.RectF()
-        // the button exactly as it looks now (focused: white with the dark icon)
+    private fun morphFrom(anchor: View) {
         card.icon = runCatching {
             android.graphics.Bitmap.createBitmap(anchor.width, anchor.height, android.graphics.Bitmap.Config.ARGB_8888).also {
                 anchor.draw(android.graphics.Canvas(it))
             }
         }.getOrNull()
+        scroller.alpha = 0f
         card.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 card.viewTreeObserver.removeOnPreDrawListener(this)
-                val a = IntArray(2).also { anchor.getLocationOnScreen(it) }
-                val c = IntArray(2).also { card.getLocationOnScreen(it) }
+                val a = IntArray(2).also { anchor.getLocationInWindow(it) }
+                val c = IntArray(2).also { card.getLocationInWindow(it) }
+                // includes the button's focus zoom
                 val w = anchor.width * anchor.scaleX
                 val h = anchor.height * anchor.scaleY
-                // getLocationOnScreen already includes the focus zoom around the centre
-                from = android.graphics.RectF(a[0] - c[0].toFloat(), a[1] - c[1].toFloat(), a[0] - c[0] + w, a[1] - c[1] + h)
+                val l = a[0] - c[0] + (anchor.width - w) / 2f * 0f
+                from = android.graphics.RectF(l, a[1] - c[1].toFloat(), l + w, a[1] - c[1] + h)
                 fromRadius = minOf(w, h) / 2f
                 shapeAt(0f)
-                // the window's first frame is slow: start once it's really on screen (until then
-                // it looks exactly like the button, so the wait is invisible)
-                card.postOnAnimation { card.postOnAnimation {
-                    shapeAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-                        duration = 1100 // ≈550 ms at 0.5x
-                        interpolator = android.view.animation.LinearInterpolator()
-                        addUpdateListener { shapeAt(it.animatedValue as Float) }
-                        start()
-                    }
-                    scroller.translationY = -px(8).toFloat()
-                    scroller.animate().alpha(1f).translationY(0f).setStartDelay(420).setDuration(640)
-                        .setInterpolator(android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)).start()
-                } }
+                shapeAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 760 // ≈380 ms at 0.5x
+                    interpolator = open
+                    addUpdateListener { shapeAt(it.animatedValue as Float) }
+                    start()
+                }
                 return true
             }
         })
-        exitAnimation = { done ->
-            val at = (shapeAnim?.animatedValue as? Float) ?: 1f
-            shapeAnim?.cancel()
-            scroller.animate().cancel()
-            scroller.animate().alpha(0f).setStartDelay(0).setDuration(200).start()
-            android.animation.ValueAnimator.ofFloat(at, 0f).apply {
-                duration = (820 * at).toLong().coerceAtLeast(200)
-                interpolator = android.view.animation.PathInterpolator(0.5f, 0f, 0.2f, 1f)
-                addUpdateListener { shapeAt(it.animatedValue as Float) }
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    // back to an exact copy of the button: the real one takes over invisibly
-                    override fun onAnimationEnd(a: android.animation.Animator) { card.postOnAnimation { done() } }
-                })
-                start()
-            }
+    }
+
+    private fun closeOverlay(done: () -> Unit) {
+        if (closing) return
+        closing = true
+        val root = overlay ?: return done()
+        val at = (shapeAnim?.animatedValue as? Float) ?: 1f
+        shapeAnim?.cancel()
+        android.animation.ValueAnimator.ofFloat(at, 0f).apply {
+            duration = (600 * at).toLong().coerceAtLeast(160)
+            interpolator = fold
+            addUpdateListener { shapeAt(it.animatedValue as Float) }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: android.animation.Animator) {
+                    // it's an exact copy of the button again: the real one takes over invisibly
+                    (root.parent as? ViewGroup)?.removeView(root)
+                    overlay = null
+                    done()
+                }
+            })
+            start()
         }
     }
 
@@ -485,6 +515,12 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     }
 
     fun dismiss() {
+        if (overlay != null) {
+            // the focus must not be left inside a view that's going away
+            anchor?.requestFocus()
+            closeOverlay { onDismiss?.invoke() }
+            return
+        }
         if (window.isShowing) window.dismiss()
     }
 
@@ -509,44 +545,58 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
     val radius = 20 * dp
     /** where the card's own area starts (above it: the button it comes out of) */
     var contentTop = 0
-    var shape: android.graphics.RectF? = null
-        set(v) { field = v; invalidate() }
-    var shapeRadius = radius
-    /** 0..1: how much it still looks like the white focused button it grows out of */
-    var whiteness = 0f
-    /** the button's snapshot, drawn in [iconRect] at [iconAlpha] */
-    var icon: android.graphics.Bitmap? = null
-    var iconAlpha = 0f
-    val iconRect = android.graphics.RectF()
-    private val iconPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-    private val path = android.graphics.Path()
     private val rect = android.graphics.RectF()
+    private var r = radius
+    private var morphing = false
+    private var whiteness = 0f
+    private var iconAlpha = 0f
+    private val iconRect = android.graphics.RectF()
+    /** the button's snapshot, drawn while the pill is still a pill */
+    var icon: android.graphics.Bitmap? = null
     private val loc = IntArray(2)
     private val glass = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
     private val frost = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     private val border = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
         strokeWidth = dp
-        color = 0x4DFFFFFF
     }
+    private val iconPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
     private val matrix = android.graphics.Matrix()
     private var shaderFor: android.graphics.Bitmap? = null
+    private var frostFor = -1
 
     init {
         setWillNotDraw(false)
-        clipChildren = true
+        // the shape clips everything (children included) on the GPU: cheap to change every frame
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                current()
+                outline.setRoundRect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt(), r)
+            }
+        }
+        clipToOutline = true
     }
 
-    private fun current(): Float {
-        val s = shape
-        if (s != null) { rect.set(s); return shapeRadius }
-        rect.set(0f, contentTop.toFloat(), width.toFloat(), height.toFloat())
-        return radius
+    /** One frame of the morph: [shape] with corner [radius], how white it still is, the icon's fade. */
+    fun setMorph(shape: android.graphics.RectF, radius: Float, white: Float, iconFade: Float, iconAt: android.graphics.RectF) {
+        morphing = true
+        rect.set(shape); r = minOf(radius, shape.height() / 2f, shape.width() / 2f)
+        whiteness = white; iconAlpha = iconFade
+        // the icon rides in the pill's corner on the button's side
+        iconRect.set(shape.right - iconAt.width(), shape.top, shape.right, shape.top + iconAt.height())
+        invalidateOutline()
+        invalidate()
+    }
+
+    private fun current() {
+        if (morphing) return
+        rect.set(0f, contentTop.toFloat(), width.toFloat(), height.toFloat()); r = radius
     }
 
     override fun onDraw(canvas: android.graphics.Canvas) {
-        val r = minOf(current(), rect.height() / 2f, rect.width() / 2f)
-        if (rect.width() <= 0f || rect.height() <= 0f) return
+        current()
+        if (rect.width() <= 1f || rect.height() <= 1f) return
         GlassView.blurred?.let { b ->
             if (shaderFor !== b) {
                 glass.shader = android.graphics.BitmapShader(b, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
@@ -559,24 +609,32 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
             glass.shader.setLocalMatrix(matrix)
             canvas.drawRoundRect(rect, r, r, glass)
         }
-        frost.shader = android.graphics.LinearGradient(0f, rect.top, 0f, rect.bottom,
-            if (GlassView.night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else Theme.frostColors(),
-            floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        // the frosted gradient spans the whole card (built once per size), the shape just reveals it
+        if (frostFor != height) {
+            frostFor = height
+            frost.shader = android.graphics.LinearGradient(0f, contentTop.toFloat(), 0f, height.toFloat(),
+                if (GlassView.night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else Theme.frostColors(),
+                floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        }
         canvas.drawRoundRect(rect, r, r, frost)
         // a darker veil so text stays readable on bright wallpapers
-        frost.shader = null
-        frost.color = 0x59000000
-        canvas.drawRoundRect(rect, r, r, frost)
+        fill.color = 0x59000000
+        canvas.drawRoundRect(rect, r, r, fill)
         if (whiteness > 0f) {
-            frost.color = ((whiteness * 0xF2).toInt() shl 24) or (Theme.accent and 0xFFFFFF)
-            canvas.drawRoundRect(rect, r, r, frost)
+            fill.color = ((whiteness * 0xF2).toInt() shl 24) or (Theme.accent and 0xFFFFFF)
+            canvas.drawRoundRect(rect, r, r, fill)
         }
-        border.alpha = ((1f - whiteness) * 0x4D).toInt()
+        border.color = (((1f - whiteness) * 0x4D).toInt() shl 24) or 0xFFFFFF
         val h = border.strokeWidth / 2
         canvas.drawRoundRect(rect.left + h, rect.top + h, rect.right - h, rect.bottom - h, r, r, border)
-        icon?.let { b ->
-            if (iconAlpha <= 0f) return@let
-            // inked like under the selector pill: the button's own icon is white, the pill darkens it
+    }
+
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        super.dispatchDraw(canvas)
+        val b = icon ?: return
+        if (iconAlpha <= 0f) return
+        // inked like under the selector pill: the button's own icon is white, the pill darkens it
+        if (iconPaint.colorFilter == null) {
             val c = Theme.onAccent
             iconPaint.colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
                 0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
@@ -584,23 +642,9 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
                 0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
                 0f, 0f, 0f, 2.5f, 0f,
             ))
-            iconPaint.alpha = (iconAlpha * 255).toInt()
-            canvas.save()
-            canvas.clipPath(android.graphics.Path().apply { addRoundRect(rect, r, r, android.graphics.Path.Direction.CW) })
-            canvas.drawBitmap(b, null, iconRect, iconPaint)
-            canvas.restore()
         }
-    }
-
-    override fun dispatchDraw(canvas: android.graphics.Canvas) {
-        val r = minOf(current(), rect.height() / 2f, rect.width() / 2f)
-        if (rect.width() <= 0f || rect.height() <= 0f) return
-        path.reset()
-        path.addRoundRect(rect, r, r, android.graphics.Path.Direction.CW)
-        canvas.save()
-        canvas.clipPath(path)
-        super.dispatchDraw(canvas)
-        canvas.restore()
+        iconPaint.alpha = (iconAlpha * 255).toInt()
+        canvas.drawBitmap(b, null, iconRect, iconPaint)
     }
 }
 
