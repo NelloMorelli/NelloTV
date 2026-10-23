@@ -925,9 +925,19 @@ class MainActivity : ComponentActivity(), Host {
      * you're going, the new one comes in from the other side. Header stays put; the dock only
      * crossfades when entering/leaving Sport (its own dock).
      */
+    /** The dock fully shown (an interrupted fade could leave it invisible). */
+    private fun resetDock() {
+        findViewById<View>(R.id.dock).apply {
+            animate().cancel()
+            alpha = 1f
+            translationX = 0f
+        }
+    }
+
     private fun show(section: Section, focusContent: Boolean = false) {
         val from = current
         if (from == section || rowsView.tag == null) {
+            resetDock()
             showNow(section, focusContent)
             return
         }
@@ -936,8 +946,12 @@ class MainActivity : ComponentActivity(), Host {
         val dir = if (section.ordinal > from.ordinal) 1 else -1
         val shift = 56 * resources.displayMetrics.density
         val dockChanges = (from == Section.SPORT) != (section == Section.SPORT)
+        // the dock only moves when its content changes (in/out of Sport): otherwise it stays put,
+        // fully visible, even if a previous switch was interrupted halfway through its fade
+        if (!dockChanges) resetDock()
         val out = tabContent(from, dockChanges).filter { it.visibility == View.VISIBLE }
         if (out.isEmpty()) {
+            resetDock()
             showNow(section, focusContent)
             return
         }
