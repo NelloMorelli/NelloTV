@@ -15,6 +15,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.view.updateLayoutParams
 import androidx.activity.addCallback
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
@@ -1026,6 +1027,13 @@ class MainActivity : ComponentActivity(), Host {
         val infoUnder = if (Theme.showCardInfo && (section == Section.EXPLORE || section == Section.SPORT || section == Section.TV)) View.VISIBLE else View.GONE
         carouselTitle.visibility = infoUnder
         carouselMeta.visibility = infoUnder
+        // carousel → dock: the same distance as dock → bottom of the TV, measured from what you
+        // see (the cards, or the info under them; the carousel has 12dp of padding below the cards)
+        val dp = resources.displayMetrics.density
+        val gap = resources.getDimensionPixelSize(R.dimen.dock_bottom)
+        findViewById<View>(R.id.dock).updateLayoutParams<ViewGroup.MarginLayoutParams> {
+            topMargin = if (infoUnder == View.VISIBLE) gap else gap - (12 * dp).toInt()
+        }
         below.visibility = if (hasBelow(section)) View.VISIBLE else View.GONE
         findViewById<TextView>(R.id.bentoTitle).text = if (section == Section.SPORT) "App sport" else "Tutte le app"
         if (changed) { shownContinue = null; shownBento = null }

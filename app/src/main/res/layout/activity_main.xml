@@ -298,7 +298,7 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- free space split above and below the carousel: the content sits in the middle -->
+            <!-- free space above: the carousel sits right on top of the dock -->
             <Space
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -359,18 +359,13 @@
                 android:textColor="@color/text_dim"
                 android:textSize="13sp" />
 
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
             <com.nello.tvhome.GlassView
                 android:id="@+id/dock"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dock_height"
                 android:layout_marginStart="44dp"
                 android:layout_marginEnd="44dp"
-                android:layout_marginTop="@dimen/section_gap"
+                android:layout_marginTop="@dimen/dock_bottom"
                 android:layout_marginBottom="@dimen/dock_bottom"
                 android:clipChildren="false">
 
