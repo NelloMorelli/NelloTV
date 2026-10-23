@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity(), Host {
         const val ACTION_LINK_NUVIO = "com.nello.tvhome.LINK_NUVIO"
         const val ACTION_OPEN_SPORT = "com.nello.tvhome.OPEN_SPORT"
         const val ACTION_CHECK_UPDATE = "com.nello.tvhome.CHECK_UPDATE"
+        const val ACTION_SCREENSAVER = "com.nello.tvhome.SCREENSAVER"
     }
 
     /** Order matches the tabs in the top bar. */
@@ -551,6 +552,12 @@ class MainActivity : ComponentActivity(), Host {
             val composed = withContext(Dispatchers.Default) { composeBackground(source) }
             findViewById<ImageView>(R.id.wallpaper).setImageBitmap(composed)
             setGlass(source)
+            // the screensaver shows this exact background (wallpaper, no UI)
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    java.io.File(filesDir, ScreensaverView.BACKGROUND).outputStream().use { composed.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+                }
+            }
         }
     }
 
@@ -601,7 +608,59 @@ class MainActivity : ComponentActivity(), Host {
      * Up from the label goes to the current tab (not the top-right menu); down from the tabs
      * goes straight to the carousel's wide card; Back from anywhere goes to the current tab.
      */
+    // ---------------------------------------------------------------- screensaver
+
+    private var saver: ScreensaverView? = null
+    private var saverEnding = false
+    private val idleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val idleRunnable = Runnable { startScreensaver() }
+
+    /** A few seconds before the system's own screensaver would kick in, ours starts. */
+    private fun resetIdle() {
+        idleHandler.removeCallbacks(idleRunnable)
+        if (!prefs.screensaver || !inForeground) return
+        val timeout = runCatching { android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.SCREEN_OFF_TIMEOUT) }.getOrDefault(300_000)
+        idleHandler.postDelayed(idleRunnable, (timeout - 8_000L).coerceAtLeast(10_000L))
+    }
+
+    /** Everything but the wallpaper melts away; then the wallpaper dims and the clock appears. */
+    fun startScreensaver() {
+        if (saver != null || !inForeground) return
+        // our screensaver holds the screen, so Amazon's never starts while it's up
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val v = ScreensaverView(this, withWallpaper = false)
+        (findViewById<ViewGroup>(android.R.id.content)).addView(v, ViewGroup.LayoutParams(-1, -1))
+        saver = v
+        page.animate().cancel()
+        page.animate().alpha(0f).setDuration(1800).setInterpolator(android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)).start()
+        v.start {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            WakeService.instance?.sleep()
+        }
+    }
+
+    /** Any key: the clock fades, the dimming lifts, and the UI comes back. */
+    private fun stopScreensaver() {
+        val v = saver ?: return
+        if (saverEnding) return
+        saverEnding = true
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        v.end(900) {
+            (v.parent as? ViewGroup)?.removeView(v)
+            saver = null
+            saverEnding = false
+        }
+        page.animate().alpha(1f).setStartDelay(250).setDuration(900).setInterpolator(android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)).start()
+        resetIdle()
+    }
+
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // screensaver up: the key only wakes the UI
+        if (saver != null) {
+            if (event.action == android.view.KeyEvent.ACTION_UP) stopScreensaver()
+            return true
+        }
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) resetIdle()
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
         if (event.action == android.view.KeyEvent.ACTION_DOWN && isSingle(current)) {
             val tabsFocused = findViewById<View>(R.id.tabGroup).hasFocus()
@@ -639,6 +698,14 @@ class MainActivity : ComponentActivity(), Host {
     override fun onPause() {
         super.onPause()
         inForeground = false
+        idleHandler.removeCallbacks(idleRunnable)
+        if (saver != null) {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            (saver?.parent as? ViewGroup)?.removeView(saver)
+            saver = null
+            saverEnding = false
+            page.alpha = 1f
+        }
         getSharedPreferences("where", MODE_PRIVATE).edit()
             .putString("section", current.name)
             .putInt("card", carouselAdapter?.active ?: 0)
@@ -649,6 +716,10 @@ class MainActivity : ComponentActivity(), Host {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: back to the top of Esplora
+        if (intent.action == ACTION_SCREENSAVER) {
+            idleHandler.postDelayed({ startScreensaver() }, 600)
+            return
+        }
         if (intent.action == ACTION_CHECK_UPDATE) {
             checkForUpdateNow()
             return
@@ -673,6 +744,9 @@ class MainActivity : ComponentActivity(), Host {
         super.onResume()
         inForeground = true
         ensureBackgroundService()
+        // ours rides on Amazon's screensaver (it covers it): it must be on, else the TV just sleeps
+        runCatching { android.provider.Settings.Secure.putInt(contentResolver, "screensaver_enabled", if (prefs.screensaver) 1 else 0) }
+        resetIdle()
         applyPrefs()
         network.refresh()
         refreshExploreLiveRows()

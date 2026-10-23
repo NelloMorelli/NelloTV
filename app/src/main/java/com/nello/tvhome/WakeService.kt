@@ -39,6 +39,12 @@ class WakeService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        // Amazon's screensaver started (inactivity in another app): cover it with ours
+        if (event.packageName == AMAZON_AMBIENT && LauncherPrefs(this).screensaver) {
+            startActivity(Intent(this, ScreensaverActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
+            return
+        }
         if (event.packageName != AMAZON_HOME) return
         // only just after waking up: opening Amazon's home on purpose later still works
         if (System.currentTimeMillis() - screenOnAt > 8_000) return
@@ -50,6 +56,16 @@ class WakeService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    /** Close Amazon's screensaver left under ours. */
+    fun dismissAmbient() {
+        android.os.Handler(mainLooper).postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 150)
+    }
+
+    /** Standby after the screensaver's time limit (TVs treat "lock screen" as sleep). */
+    fun sleep() {
+        performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+    }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(receiver) }
@@ -64,5 +80,6 @@ class WakeService : AccessibilityService() {
         fun testBanner() = instance?.notifier?.show("Napoli – Inter", "Serie A · tra 10 minuti · 20:45", null) {}
 
         private const val AMAZON_HOME = "com.amazon.tv.launcher"
+        private const val AMAZON_AMBIENT = "com.amazon.tv.ftvambient"
     }
 }

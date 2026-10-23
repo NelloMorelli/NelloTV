@@ -61,6 +61,14 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity
+            android:name=".ScreensaverActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.NelloTV" />
+
         <service
             android:name=".WakeService"
             android:exported="false"

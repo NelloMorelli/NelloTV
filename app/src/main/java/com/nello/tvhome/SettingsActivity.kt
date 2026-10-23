@@ -16,6 +16,11 @@ class LauncherPrefs(context: Context) {
         get() = p.getString("wallpaper", "original")!!
         set(v) = p.edit().putString("wallpaper", v).apply()
 
+    /** always-on screensaver (wallpaper + clock) instead of Amazon's */
+    var screensaver: Boolean
+        get() = p.getBoolean("screensaver", true)
+        set(v) = p.edit().putBoolean("screensaver", v).apply()
+
     var night: Boolean
         get() = p.getBoolean("night", false)
         set(v) = p.edit().putBoolean("night", v).apply()
@@ -104,6 +109,14 @@ class SettingsActivity : GlassPage() {
                 window.decorView.postDelayed({ WakeService.testBanner() }, 600)
             }
             p.showUnder(it)
+        }
+        row("Salvaschermo", if (prefs.screensaver) "Sfondo e orologio" else "Quello di Amazon") {
+            prefs.screensaver = !prefs.screensaver
+            build()
+        }
+        row("Prova salvaschermo", "›") {
+            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_SCREENSAVER))
+            finish()
         }
         row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") {
             prefs.night = !prefs.night
