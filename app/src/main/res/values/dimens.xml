@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared spacing: change it here and the whole home follows. (The global size is UiScale.) -->
+<resources>
+    <!-- distance between the big blocks: header, carousel, its info, dock -->
+    <dimen name="section_gap">36dp</dimen>
+    <!-- smaller gap inside a block (carousel → its title) -->
+    <dimen name="inner_gap">14dp</dimen>
+    <!-- dock: tile size and the glass around it -->
+    <dimen name="dock_tile_w">128dp</dimen>
+    <dimen name="dock_tile_h">72dp</dimen>
+    <dimen name="dock_height">94dp</dimen>
+    <dimen name="dock_bottom">40dp</dimen>
+</resources>

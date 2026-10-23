@@ -164,7 +164,7 @@ class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.
         v.findViewById<View>(R.id.progressFill).background = Theme.progressFill(parent.context)
         val (w, h) = when (kind) {
             RowKind.APPS -> 160 to 90
-            RowKind.DOCK -> 156 to 88
+            RowKind.DOCK -> 128 to 72
             RowKind.POSTER -> 112 to 168
             else -> 208 to 117
         }

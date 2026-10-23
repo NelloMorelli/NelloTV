@@ -37,6 +37,9 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity(), Host {
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(UiScale.wrap(newBase))
+
+
     companion object {
         const val ACTION_LINK_NUVIO = "com.nello.tvhome.LINK_NUVIO"
         const val ACTION_OPEN_SPORT = "com.nello.tvhome.OPEN_SPORT"

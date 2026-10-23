@@ -24,6 +24,9 @@ import kotlinx.coroutines.launch
  */
 class OnboardingActivity : ComponentActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(UiScale.wrap(newBase))
+
+
     private lateinit var prefs: LauncherPrefs
     private lateinit var title: TextView
     private lateinit var subtitle: TextView

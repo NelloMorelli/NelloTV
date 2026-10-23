@@ -37,6 +37,9 @@ fun Activity.openPage(intent: Intent) {
  */
 abstract class GlassPage : ComponentActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(UiScale.wrap(newBase))
+
+
     companion object {
         const val EXTRA_FROM = "glass_from"
     }

@@ -112,6 +112,9 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
 /** The screensaver over other apps: shown in place of Amazon's (see WakeService). */
 class ScreensaverActivity : Activity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(UiScale.wrap(newBase))
+
+
     private lateinit var view: ScreensaverView
     private var closing = false
 

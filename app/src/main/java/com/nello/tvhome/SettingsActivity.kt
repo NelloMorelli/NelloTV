@@ -105,6 +105,9 @@ class LauncherPrefs(context: Context) {
  */
 class SettingsActivity : ComponentActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) = super.attachBaseContext(UiScale.wrap(newBase))
+
+
     private lateinit var prefs: LauncherPrefs
     private lateinit var apps: Apps
     private lateinit var nuvio: NuvioSync
@@ -381,6 +384,14 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun look() {
+        header("Dimensioni")
+        row("Dimensione interfaccia", UiScale.OPTIONS.firstOrNull { it.first == UiScale.factor(this) }?.second ?: "${(UiScale.factor(this) * 100).toInt()}%") { v ->
+            pick(v, "Dimensione interfaccia", UiScale.OPTIONS.map { it.second }, UiScale.OPTIONS.indexOfFirst { it.first == UiScale.factor(this) }) { i ->
+                Theme.edit(this).putFloat("uiScale", UiScale.OPTIONS[i].first).apply()
+                // this screen too, right away
+                recreate()
+            }
+        }
         header("Colori e vetro")
         row("Colore principale", Theme.ACCENTS.firstOrNull { it.second == Theme.accent }?.first ?: "Personalizzato") { v ->
             pick(v, "Colore principale", Theme.ACCENTS.map { it.first }, Theme.ACCENTS.indexOfFirst { it.second == Theme.accent }) { i ->
