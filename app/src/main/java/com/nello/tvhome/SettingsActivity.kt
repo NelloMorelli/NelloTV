@@ -36,6 +36,11 @@ class LauncherPrefs(context: Context) {
         get() = if (p.contains("sportVpn")) p.getString("sportVpn", null) else "wgcf-profile"
         set(v) = p.edit().putString("sportVpn", v).apply()
 
+    /** Nello TV replaces Amazon's home (Home button included) */
+    var replaceHome: Boolean
+        get() = p.getBoolean("replaceHome", true)
+        set(v) = p.edit().putBoolean("replaceHome", v).apply()
+
     var night: Boolean
         get() = p.getBoolean("night", false)
         set(v) = p.edit().putBoolean("night", v).apply()
@@ -449,6 +454,18 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun fireTv() {
+        header("Home")
+        row("Nello TV come home", if (prefs.replaceHome) "Sì · anche il tasto Home" else "Solo dopo lo standby") {
+            prefs.replaceHome = !prefs.replaceHome
+            build()
+        }
+        row("Apri la home di Amazon", "›") {
+            WakeService.amazonHomeUntil = System.currentTimeMillis() + 60_000
+            runCatching {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                    .setPackage("com.amazon.tv.launcher").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
         header("Impostazioni della Fire TV")
         system("Rete e Wi-Fi", Settings.ACTION_WIFI_SETTINGS)
         system("Telecomandi e dispositivi Bluetooth", "android.settings.CONTROLLERS_SETTINGS")

@@ -8,8 +8,9 @@ import android.content.IntentFilter
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Fire OS shows Amazon's home after standby, and Home on Fire only redirects the Home button.
- * Right after the screen turns on, if Amazon's launcher comes to the front, bring Nello TV back.
+ * Makes Nello TV the home on Fire OS, which doesn't let you pick another launcher: whenever
+ * Amazon's home screen comes to the front (Home button, after standby, at power-on) Nello TV
+ * takes its place. Also the screensaver over other apps and the notification banners.
  */
 class WakeService : AccessibilityService() {
 
@@ -46,8 +47,13 @@ class WakeService : AccessibilityService() {
             return
         }
         if (event.packageName != AMAZON_HOME) return
-        // only just after waking up: opening Amazon's home on purpose later still works
-        if (System.currentTimeMillis() - screenOnAt > 8_000) return
+        // Amazon's home itself (not its other pages, e.g. the app library or a search)
+        val home = event.className?.toString()?.contains("HomeActivity") == true
+        val justWoke = System.currentTimeMillis() - screenOnAt < 8_000
+        if (!home && !justWoke) return
+        if (!LauncherPrefs(this).replaceHome && !justWoke) return
+        // opened on purpose from Nello TV ("Home di Amazon"): leave it for a minute
+        if (System.currentTimeMillis() < amazonHomeUntil) return
         screenOnAt = 0
         startActivity(
             Intent(this, MainActivity::class.java)
@@ -93,5 +99,7 @@ class WakeService : AccessibilityService() {
 
         private const val AMAZON_HOME = "com.amazon.tv.launcher"
         private const val AMAZON_AMBIENT = "com.amazon.tv.ftvambient"
+        /** set when you open Amazon's home on purpose: no redirect until then */
+        var amazonHomeUntil = 0L
     }
 }
