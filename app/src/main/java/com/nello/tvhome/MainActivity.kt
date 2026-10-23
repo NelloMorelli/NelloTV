@@ -1677,8 +1677,12 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
+    /** the tile the spotlight flies out of (and back into) */
+    private var spotlightSource: View? = null
+
     override fun onAppMenu(app: AppInfo) {
         if (app.pkg == Apps.HIDDEN_TILE) return
+        spotlightSource = currentFocus
         val inDock = app.pkg in apps.dock(sportDock)
         val p = popup().title(app.label, if (inDock) (if (sportDock) "Nel dock Sport" else "Nel dock") else null)
         p.button("Apri") { onAppClicked(app) }
@@ -1715,7 +1719,7 @@ class MainActivity : ComponentActivity(), Host {
             toast("${app.label} nascosta · la trovi in \"App nascoste\"")
             rebuildExplore()
         }
-        p.showSpotlight(page, appHero(app), 272, 153)
+        p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
     }
 
     /** Update the Sport tab's "App sport" grid in place. */
@@ -1746,7 +1750,7 @@ class MainActivity : ComponentActivity(), Host {
                 refreshDock(app.label)
             }
         }
-        p.showSpotlight(page, appHero(app), 272, 153)
+        p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
     }
 
     /** The app's tile, enlarged, for the spotlight menu. */

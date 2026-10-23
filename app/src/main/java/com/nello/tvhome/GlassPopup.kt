@@ -152,7 +152,8 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
      * Spotlight: the screen behind is blurred and dimmed, [hero] (e.g. the app's banner, enlarged)
      * sits in the middle and the menu card next to it — always fully on screen.
      */
-    fun showSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int) {
+    /** [source]: the app's tile on screen; the hero flies out of it and back into it. */
+    fun showSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int, source: View? = null) {
         prepare()
         // posters are hardware bitmaps, so the screen is captured with PixelCopy rather than View.draw
         val activity = context as android.app.Activity
@@ -162,16 +163,19 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
             // blur off the main thread, so the opening animation isn't stalled
             Thread {
                 val blur = if (result == android.view.PixelCopy.SUCCESS) GlassView.makeBlur(shot) else GlassView.blurred
-                main.post { openSpotlight(screen, hero, heroWidthDp, heroHeightDp, blur) }
+                main.post { openSpotlight(screen, hero, heroWidthDp, heroHeightDp, blur, source) }
             }.start()
         }, main)
     }
 
-    private fun openSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int, blur: android.graphics.Bitmap?) {
+    private fun openSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int, blur: android.graphics.Bitmap?, source: View?) {
         // the app on top, its menu right underneath, both centred
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            // the tile flies in from outside this box
+            clipChildren = false
+            clipToPadding = false
             addView(hero, LinearLayout.LayoutParams(px(heroWidthDp), px(heroHeightDp)).apply { bottomMargin = px(18) })
             (card.parent as? ViewGroup)?.removeView(card)
             addView(card, LinearLayout.LayoutParams(window.width, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -182,7 +186,12 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
                 blur?.let { android.graphics.drawable.BitmapDrawable(context.resources, it) },
                 ColorDrawable(0x80000000.toInt()),
             ).toTypedArray())
-            addView(row, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+            // anchored from the top (not centred): the tile's landing spot doesn't move while the
+            // menu below it takes its size
+            addView(row, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = (context.resources.displayMetrics.heightPixels * 0.13f).toInt()
+            })
+            clipChildren = false
         }
         window.contentView = root
         window.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -198,44 +207,114 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         val easeOut = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
         val bg = root.background
         bg.alpha = 0
-        hero.alpha = 0f
-        hero.scaleX = 0.82f
-        hero.scaleY = 0.82f
-        hero.translationY = px(24).toFloat()
         card.alpha = 0f
         card.translationY = px(36).toFloat()
+
+        // the source tile's rect on screen (getLocationOnScreen includes its focus zoom)
+        val src = source?.takeIf { it.isAttachedToWindow && it.width > 0 }?.let {
+            val l = IntArray(2).also { a -> it.getLocationOnScreen(a) }
+            android.graphics.RectF(l[0].toFloat(), l[1].toFloat(), l[0] + it.width * it.scaleX, l[1] + it.height * it.scaleY)
+        }
+        /**
+         * Flight between the source tile and the hero's own place, as progress t (0 = over the
+         * source, 1 = in place). The offset is recomputed every frame from where the hero is laid
+         * out right now, so the path stays right even if the popup's layout settles mid-flight.
+         */
+        val loc = IntArray(2)
+        fun flyTo(t: Float) {
+            val r = src ?: return
+            if (hero.width == 0) return
+            hero.getLocationOnScreen(loc)
+            // layout position = screen position minus current translation
+            val baseX = loc[0] - hero.translationX
+            val baseY = loc[1] - hero.translationY
+            val u = 1f - t
+            hero.translationX = (r.left - baseX) * u
+            hero.translationY = (r.top - baseY) * u
+            hero.scaleX = 1f + (r.width() / hero.width - 1f) * u
+            hero.scaleY = 1f + (r.height() / hero.height - 1f) * u
+        }
+        hero.pivotX = 0f
+        hero.pivotY = 0f
+        if (src == null) {
+            hero.alpha = 0f
+            hero.scaleX = 0.82f; hero.scaleY = 0.82f
+            hero.pivotX = px(heroWidthDp) / 2f; hero.pivotY = px(heroHeightDp) / 2f
+        } else {
+            hero.visibility = View.INVISIBLE
+        }
+
         root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 root.viewTreeObserver.removeOnPreDrawListener(this)
-                root.postOnAnimation {
+                if (src != null) {
+                    flyTo(0f)
+                    hero.visibility = View.VISIBLE
+                    // the app has "lifted off" its spot
+                    source?.alpha = 0f
+                }
+                // the popup's first frame is slow (~100 ms): start the clock only once it's on
+                // screen, or the first part of the flight is skipped
+                root.postOnAnimation { root.postOnAnimation {
                     android.animation.ValueAnimator.ofInt(0, 255).apply {
                         duration = 480
                         interpolator = easeOut
                         addUpdateListener { bg.alpha = it.animatedValue as Int }
                         start()
                     }
-                    hero.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
-                        .setDuration(700).setInterpolator(easeOut).start()
+                    if (src != null) android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                        duration = 720
+                        interpolator = easeOut
+                        addUpdateListener { flyTo(it.animatedValue as Float) }
+                        start()
+                    } else {
+                        hero.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(720).setInterpolator(easeOut).start()
+                    }
                     card.animate().alpha(1f).translationY(0f)
-                        .setStartDelay(140).setDuration(700).setInterpolator(easeOut).start()
-                }
-                return true
+                        .setStartDelay(160).setDuration(700).setInterpolator(easeOut).start()
+                } }
+                return false
             }
         })
 
-        // exit: quick fade, slightly shrinking
+        // exit: the menu fades, the tile flies back into its spot (or shrinks away)
         exitAnimation = { done ->
-            val easeIn = android.view.animation.AccelerateInterpolator(1.5f)
+            val easeInOut = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
             android.animation.ValueAnimator.ofInt(bg.alpha, 0).apply {
-                duration = 300
-                interpolator = easeIn
+                duration = 480
+                interpolator = easeInOut
                 addUpdateListener { bg.alpha = it.animatedValue as Int }
                 start()
             }
-            card.animate().alpha(0f).translationY(px(16).toFloat()).setStartDelay(0).setDuration(260).setInterpolator(easeIn).start()
-            hero.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(300).setInterpolator(easeIn)
-                .withEndAction { done() }.start()
+            card.animate().alpha(0f).translationY(px(16).toFloat()).setStartDelay(0).setDuration(260)
+                .setInterpolator(android.view.animation.AccelerateInterpolator(1.5f)).start()
+            // landed: show the real tile first, close the popup on the next frame (no empty-spot flash)
+            val finish = {
+                source?.alpha = 1f
+                root.postOnAnimation { done() }
+            }
+            if (src != null && source?.isAttachedToWindow == true) {
+                android.animation.ValueAnimator.ofFloat(1f, 0f).apply {
+                    duration = 520
+                    interpolator = easeInOut
+                    addUpdateListener { flyTo(it.animatedValue as Float) }
+                    addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(a: android.animation.Animator) { finish() }
+                    })
+                    start()
+                }
+            } else {
+                hero.animate().alpha(0f).scaleX(0.9f).scaleY(0.9f).setDuration(300)
+                    .setInterpolator(android.view.animation.AccelerateInterpolator(1.5f)).withEndAction { finish() }.start()
+            }
         }
+        // whatever closes it, the app tile comes back
+        val prevDismiss = onDismiss
+        onDismiss = {
+            source?.alpha = 1f
+            prevDismiss?.invoke()
+        }
+        window.setOnDismissListener { onDismiss?.invoke() }
     }
 
     fun dismiss() {
