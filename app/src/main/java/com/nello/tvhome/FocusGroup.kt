@@ -228,7 +228,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
             0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
             0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
             0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
-            0f, 0f, 0f, 2.5f, 0f,
+            0f, 0f, 0f, 1.43f, 0f,
         ))
     }
     private val clip = android.graphics.Path()

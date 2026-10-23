@@ -627,7 +627,7 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
                 0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
                 0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
                 0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
-                0f, 0f, 0f, 2.5f, 0f,
+                0f, 0f, 0f, 1.43f, 0f,
             ))
         }
         iconPaint.alpha = (iconAlpha * 255).toInt()
@@ -743,7 +743,7 @@ class LiquidList(context: Context) : LinearLayout(context) {
             0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
             0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
             0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
-            0f, 0f, 0f, 2.5f, 0f,
+            0f, 0f, 0f, 1.43f, 0f,
         ))
         clip.reset()
         clip.addRoundRect(r, radius, radius, android.graphics.Path.Direction.CW)
