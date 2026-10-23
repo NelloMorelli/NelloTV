@@ -216,6 +216,25 @@ class MainActivity : ComponentActivity(), Host {
         // coming back from the dock or the tabs lands on the wide card
         carousel.preferred = { carouselAdapter?.let { carousel.layoutManager?.findViewByPosition(it.active) } }
         dockList.layoutManager = StartAlignedLayoutManager(this, RecyclerView.HORIZONTAL)
+        // the dock spans the screen: its apps spread evenly across it, however many there are
+        dockList.addItemDecoration(object : RecyclerView.ItemDecoration() {
+            override fun getItemOffsets(out: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+                val n = parent.adapter?.itemCount ?: return
+                val w = view.layoutParams.width
+                val (lpStart, lpEnd) = (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.marginStart to it.marginEnd } ?: (0 to 0)
+                val inner = parent.width - parent.paddingLeft - parent.paddingRight
+                if (n == 0 || w <= 0 || inner <= 0) return
+                val free = (inner - n * (w + lpStart + lpEnd)).coerceAtLeast(0)
+                val gap = free / (n + 1).toFloat()
+                val i = parent.getChildAdapterPosition(view)
+                if (i < 0) return
+                // space-evenly: the same gap at both ends and between apps
+                val left = Math.round(gap * (i + 1)) - Math.round(gap * i)
+                out.left = if (i == 0) Math.round(gap) else left
+                if (i == n - 1) out.right = Math.round(gap * (n + 1)) - Math.round(gap * n)
+            }
+        })
+        dockList.addOnLayoutChangeListener { v, l, _, r, _, ol, _, or, _ -> if (r - l != or - ol) (v as RecyclerView).invalidateItemDecorations() }
         // entering the dock lands on its first app on screen, not under the wide card
         dockList.preferred = {
             (0 until dockList.childCount).map { dockList.getChildAt(it) }

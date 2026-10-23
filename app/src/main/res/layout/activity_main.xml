@@ -302,7 +302,7 @@
             <Space
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="0.6" />
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/catalogLabel"
@@ -366,16 +366,17 @@
 
             <com.nello.tvhome.GlassView
                 android:id="@+id/dock"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="@dimen/dock_height"
-                android:layout_gravity="center_horizontal"
+                android:layout_marginStart="44dp"
+                android:layout_marginEnd="44dp"
                 android:layout_marginTop="@dimen/section_gap"
                 android:layout_marginBottom="@dimen/dock_bottom"
                 android:clipChildren="false">
 
                 <com.nello.tvhome.RowList
                     android:id="@+id/dockList"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:clipChildren="false"
                     android:clipToPadding="false"
