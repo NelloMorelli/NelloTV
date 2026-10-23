@@ -108,6 +108,29 @@ class MainActivity : ComponentActivity(), Host {
     private lateinit var catalogDots: CatalogDots
     private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
 
+    /**
+     * The clock sits in the middle of the free space between the tabs and the right menu (not the
+     * middle of the screen), and follows when the tabs change width (Cerca opening, hidden tabs).
+     */
+    private fun centerClock() {
+        val clock = findViewById<View>(R.id.clockTop)
+        val tabs = findViewById<View>(R.id.tabGroup)
+        val bar = findViewById<View>(R.id.rightBar)
+        val loc = IntArray(2)
+        fun place() {
+            if (clock.width == 0 || bar.width == 0) return
+            tabs.getLocationInWindow(loc); val tabsRight = loc[0] + tabs.width
+            bar.getLocationInWindow(loc); val barLeft = loc[0]
+            (clock.parent as View).getLocationInWindow(loc); val parentLeft = loc[0]
+            val target = (tabsRight + barLeft) / 2f - parentLeft - clock.width / 2f
+            clock.translationX = target - clock.left
+        }
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
+        tabs.addOnLayoutChangeListener(listener)
+        bar.addOnLayoutChangeListener(listener)
+        clock.addOnLayoutChangeListener(listener)
+    }
+
     /** Personalizza: what's on screen, card size, hidden tabs. */
     private fun applyTheme() {
         val dp = resources.displayMetrics.density
@@ -230,6 +253,7 @@ class MainActivity : ComponentActivity(), Host {
 
         setupTabs()
         applyTheme()
+        centerClock()
         setupSearch()
         setupTopBar()
         applyPrefs()
