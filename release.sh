@@ -9,8 +9,12 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 ./gradlew -q assembleRelease
 V=$(git rev-list --count HEAD)
+MAJOR=$(grep '^major=' version.properties | cut -d= -f2)
+START=$(grep '^start=' version.properties | cut -d= -f2)
+NAME="$MAJOR.$((V - START))"
 mkdir -p build
 cp app/build/outputs/apk/release/app-release.apk "build/NelloTV-v$V.apk"
 git push -q origin main
-gh release create "v$V" "build/NelloTV-v$V.apk" --title "Nello TV v$V" --notes "${1:-Aggiornamento}"
-echo "Pubblicata la versione $V"
+# the tag stays the plain number (the TV compares it); the title is the name you see
+gh release create "v$V" "build/NelloTV-v$V.apk" --title "Nello TV $NAME" --notes "${1:-Aggiornamento}"
+echo "Pubblicata la versione $NAME"
