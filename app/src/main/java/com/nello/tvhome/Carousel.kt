@@ -63,12 +63,12 @@ class CarouselAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
         val dp = ctx.resources.displayMetrics.density
-        fun px(v: Int) = (v * dp).toInt()
+        fun px(v: Int) = (v * dp * Theme.cardScale).toInt()
         val card = FrameLayout(ctx).apply {
             isFocusable = true
             isClickable = true
             setBackgroundResource(R.drawable.card_bg)
-            foreground = ctx.getDrawable(R.drawable.card_focus)
+            foreground = Theme.cardFocus(ctx)
             clipToOutline = true
             outlineProvider = object : android.view.ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: android.graphics.Outline) {
@@ -133,7 +133,7 @@ class CarouselAdapter(
     inner class VH(private val card: FrameLayout, private val type: Int) : RecyclerView.ViewHolder(card) {
         private val ctx = card.context
         private val dp = ctx.resources.displayMetrics.density
-        private fun px(v: Int) = (v * dp).toInt()
+        private fun px(v: Int) = (v * dp * Theme.cardScale).toInt()
 
         private val wide = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         private val poster = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
@@ -146,7 +146,7 @@ class CarouselAdapter(
             setPadding(px(10), px(2), 0, 0)
         }
         private val progressTrack = FrameLayout(ctx).apply { setBackgroundResource(R.drawable.progress_track) }
-        private val progressFill = View(ctx).apply { setBackgroundResource(R.drawable.progress_fill) }
+        private val progressFill = View(ctx).apply { background = Theme.progressFill(ctx) }
         private var widthAnim: ValueAnimator? = null
         private var posterJob: kotlinx.coroutines.Job? = null
         private var logoJob: kotlinx.coroutines.Job? = null
@@ -294,7 +294,7 @@ class CarouselAdapter(
                 col.addView(tvTitle)
                 col.addView(tvTime)
                 tvTrack = FrameLayout(ctx).apply { setBackgroundResource(R.drawable.progress_track) }
-                tvFill = View(ctx).apply { setBackgroundResource(R.drawable.progress_fill) }
+                tvFill = View(ctx).apply { background = Theme.progressFill(ctx) }
                 tvTrack.addView(tvFill, FrameLayout.LayoutParams(0, -1))
                 col.addView(tvTrack, LinearLayout.LayoutParams(-1, px(4)).apply { topMargin = px(8) })
                 addView(col, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(px(14), 0, px(14), px(14)) })

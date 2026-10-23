@@ -86,6 +86,7 @@ class SettingsActivity : GlassPage() {
         title("Impostazioni")
 
         header("Nello TV")
+        row("Personalizza", "Colori, vetro, schede, cataloghi, nomi…") { startActivity(Intent(this, CustomizeActivity::class.java)) }
         row("Sfondo", LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) {
             // same menu as the ⚙ pop-up: built-ins, your image (if any), pick a new one
             val hasCustom = java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).exists()

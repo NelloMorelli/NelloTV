@@ -155,10 +155,13 @@ class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.
         val kind = RowKind.entries[viewType]
         if (kind == RowKind.MATCH) {
             val v = LayoutInflater.from(parent.context).inflate(R.layout.item_match, parent, false)
+            v.foreground = Theme.cardFocus(parent.context)
             v.clipToOutline = true
             return MatchVH(v)
         }
         val v = LayoutInflater.from(parent.context).inflate(R.layout.item_card, parent, false)
+        v.foreground = Theme.cardFocus(parent.context)
+        v.findViewById<View>(R.id.progressFill).background = Theme.progressFill(parent.context)
         val (w, h) = when (kind) {
             RowKind.APPS -> 160 to 90
             RowKind.DOCK -> 156 to 88

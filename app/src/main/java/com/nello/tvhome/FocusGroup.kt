@@ -216,18 +216,25 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     }
 
     // dark ink at full strength even for dimmed (60% white) labels: colour → #111, alpha × 2.5
-    private val inkPaint = Paint().apply {
-        colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
-            0f, 0f, 0f, 0f, 17f,
-            0f, 0f, 0f, 0f, 17f,
-            0f, 0f, 0f, 0f, 17f,
+    private val inkPaint = Paint()
+    private var inkFor = 0
+
+    /** Labels under the pill take the "on accent" colour (dark on light accents, white on dark). */
+    private fun inkFilter() {
+        val c = Theme.onAccent
+        if (c == inkFor) return
+        inkFor = c
+        inkPaint.colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+            0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
+            0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
+            0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
             0f, 0f, 0f, 2.5f, 0f,
         ))
     }
     private val clip = android.graphics.Path()
 
     override fun dispatchDraw(canvas: Canvas) {
-        val r = 20 * dp
+        val r = 20 * dp * Theme.roundness
         val showPill = visibleAmount > 0.01f && pill.width() > 0f
         // appearing/disappearing: grows from (shrinks to) the item's centre, not just a fade
         val grow = 0.55f + 0.45f * visibleAmount
@@ -239,7 +246,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         if (showPill) {
             // faint white when only "selected", solid white when focused
             val alpha = (0x2E + (0xF2 - 0x2E) * strength) * visibleAmount
-            paint.color = (alpha.toInt().coerceIn(0, 255) shl 24) or 0xFFFFFF
+            paint.color = (alpha.toInt().coerceIn(0, 255) shl 24) or (Theme.accent and 0xFFFFFF)
             canvas.drawRoundRect(dl, vInset, dr, height - vInset, r, r, paint)
         }
         super.dispatchDraw(canvas)
@@ -247,6 +254,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         // dark exactly where the pill covers it
         val ink = strength * visibleAmount
         if (showPill && ink > 0.01f) {
+            inkFilter()
             inkPaint.alpha = (ink * 255).toInt()
             clip.reset()
             clip.addRoundRect(dl, vInset, dr, height - vInset, r, r, android.graphics.Path.Direction.CW)

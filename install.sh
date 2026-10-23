@@ -15,6 +15,7 @@ adb shell pm grant com.nello.tvhome android.permission.READ_EXTERNAL_STORAGE || 
 adb shell pm grant com.nello.tvhome android.permission.WRITE_SECURE_SETTINGS
 # lets it install its own updates
 adb shell appops set com.nello.tvhome REQUEST_INSTALL_PACKAGES allow
+adb shell appops set com.nello.tvhome WRITE_SETTINGS allow
 CUR=$(adb shell settings get secure enabled_accessibility_services | tr -d '\r')
 case "$CUR" in
   *com.nello.tvhome*) ;;

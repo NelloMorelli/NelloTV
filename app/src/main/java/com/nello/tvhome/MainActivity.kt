@@ -103,6 +103,17 @@ class MainActivity : ComponentActivity(), Host {
     private var shownItems: List<Any> = emptyList()
     private var carouselAdapter: CarouselAdapter? = null
     private var dockApps: List<String> = emptyList()
+    private var themeSig = ""
+    private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
+
+    /** Personalizza: what's on screen, card size, hidden tabs. */
+    private fun applyTheme() {
+        val dp = resources.displayMetrics.density
+        carousel.layoutParams = carousel.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
+        findViewById<View>(R.id.clockTop).visibility = if (Theme.showClock) View.VISIBLE else View.INVISIBLE
+        val hidden = CustomizeActivity.hiddenTabs(this)
+        tabs.forEachIndexed { i, t -> t.visibility = if (Section.entries[i].name in hidden) View.GONE else View.VISIBLE }
+    }
 
     /** the Sport tab has its own dock (sport apps) */
     private val sportDock get() = current == Section.SPORT
@@ -129,6 +140,8 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Theme.load(this)
+        themeSig = Theme.signature(this)
         setContentView(R.layout.activity_main)
         // the background bitmap covers the whole screen: no window background to paint underneath
         window.setBackgroundDrawable(null)
@@ -195,6 +208,7 @@ class MainActivity : ComponentActivity(), Host {
         rowsView.adapter = adapter
 
         setupTabs()
+        applyTheme()
         setupSearch()
         setupTopBar()
         applyPrefs()
@@ -296,7 +310,9 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     private fun switchTab(delta: Int) {
-        val next = Section.entries[(current.ordinal + delta + Section.entries.size) % Section.entries.size]
+        var next = current
+        do { next = Section.entries[(next.ordinal + delta + Section.entries.size) % Section.entries.size] }
+        while (tabs[next.ordinal].visibility != View.VISIBLE && next != current)
         show(next, focusContent = next != Section.SEARCH)
         if (next == Section.SEARCH) searchInput.requestFocus()
     }
@@ -501,6 +517,7 @@ class MainActivity : ComponentActivity(), Host {
         p.button("Rete e Wi-Fi") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } }
         p.button("Telecomandi e Bluetooth") { runCatching { startActivity(Intent("android.settings.CONTROLLERS_SETTINGS")) } }
         p.gap()
+        p.button("Personalizza") { startActivity(Intent(this, CustomizeActivity::class.java)) }
         p.button("Tutte le impostazioni") { openSettings() }
         p.showUnder(findViewById(R.id.settingsButton))
     }
@@ -588,6 +605,8 @@ class MainActivity : ComponentActivity(), Host {
         c.drawRect(0f, h - bottom, w.toFloat(), h.toFloat(), paint)
         // night mode: the whole background much darker
         if (prefs.night) c.drawColor(0xB3000000.toInt())
+        // extra darkening chosen in Personalizza
+        if (Theme.dim > 0f) c.drawColor(((Theme.dim * 255).toInt() shl 24))
         return out
     }
 
@@ -738,6 +757,11 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun onResume() {
         super.onResume()
+        // something changed in Personalizza: rebuild the home with it
+        if (Theme.signature(this) != themeSig || appNamesSig != getSharedPreferences("app_names", MODE_PRIVATE).all.toString()) {
+            recreate()
+            return
+        }
         inForeground = true
         ensureBackgroundService()
         // ours rides on Amazon's screensaver (it covers it): it must be on, else the TV just sleeps
@@ -750,7 +774,12 @@ class MainActivity : ComponentActivity(), Host {
 
     // ---------------------------------------------------------------- sections
 
-    private fun specs(section: Section): List<Spec> = when (section) {
+    private fun specs(section: Section): List<Spec> {
+        val hidden = CustomizeActivity.hiddenCatalogs(this)
+        return allSpecs(section).filter { it.key !in hidden }
+    }
+
+    private fun allSpecs(section: Section): List<Spec> = when (section) {
         Section.SEARCH -> emptyList()
         Section.EXPLORE -> buildList {
             add(Spec("perte", "Per te", RowKind.MIXED, mixed = ::perTe))
@@ -932,7 +961,7 @@ class MainActivity : ComponentActivity(), Host {
         updateSearchTab()
         refreshDock()
         val singleMode = isSingle(section)
-        val infoUnder = if (section == Section.EXPLORE || section == Section.SPORT || section == Section.TV) View.VISIBLE else View.GONE
+        val infoUnder = if (Theme.showCardInfo && (section == Section.EXPLORE || section == Section.SPORT || section == Section.TV)) View.VISIBLE else View.GONE
         carouselTitle.visibility = infoUnder
         carouselMeta.visibility = infoUnder
         below.visibility = if (hasBelow(section)) View.VISIBLE else View.GONE
@@ -940,6 +969,7 @@ class MainActivity : ComponentActivity(), Host {
         if (changed) { shownContinue = null; shownBento = null }
         if (changed) page.scrollTo(0, 0)
         single.visibility = if (singleMode) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.dock).visibility = if (Theme.showDock) View.VISIBLE else View.GONE
         if (tabAnimGen == 0 || !changed) listOf(single, rowsView, hero).forEach { it.alpha = 1f }
         hero.visibility = if (singleMode) View.GONE else View.VISIBLE
         rowsView.visibility = if (singleMode) View.GONE else View.VISIBLE
@@ -1329,7 +1359,7 @@ class MainActivity : ComponentActivity(), Host {
             isClickable = true
             contentDescription = app.label
             setBackgroundResource(R.drawable.card_bg)
-            foreground = getDrawable(R.drawable.card_focus)
+            foreground = Theme.cardFocus(this@MainActivity)
             clipToOutline = true
             if (app.banner != null) {
                 addView(ImageView(context).apply {

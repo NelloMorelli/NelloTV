@@ -108,15 +108,17 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
             canvas.drawRoundRect(rect, r, r, glassPaint)
         }
         if (frosted && !(isFocused && solidFocus)) {
-            val key = if (night) -height else height
+            val key = (if (night) -height else height) * 10 + Theme.glass
             if (frostHeight != key) {
                 frostHeight = key
                 frostPaint.shader = android.graphics.LinearGradient(0f, 0f, 0f, height.toFloat(),
-                    if (night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else intArrayOf(0x47FFFFFF, 0x24FFFFFF, 0x14FFFFFF),
+                    if (night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else Theme.frostColors(),
                     floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
             }
             canvas.drawRoundRect(rect, r, r, frostPaint)
         } else {
+            tint.alpha = Theme.glassTint(false); focusTint.alpha = Theme.glassTint(true)
+            solidPaint.color = Theme.accent
             canvas.drawRoundRect(rect, r, r, if (isFocused) (if (solidFocus) solidPaint else focusTint) else tint)
         }
         val d = resources.displayMetrics.density

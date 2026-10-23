@@ -82,6 +82,8 @@ class Apps(private val context: Context) {
 
     private fun installed(): Map<String, AppInfo> = cache ?: load().also { cache = it }
 
+    private val names = context.getSharedPreferences("app_names", Context.MODE_PRIVATE)
+
     private fun load(): Map<String, AppInfo> {
         val result = linkedMapOf<String, AppInfo>()
         for (category in listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER)) {
@@ -92,7 +94,8 @@ class Apps(private val context: Context) {
                 val ai = ri.activityInfo
                 result[pkg] = AppInfo(
                     pkg = pkg,
-                    label = ri.loadLabel(pm).toString(),
+                    // a name chosen in Personalizza wins
+                    label = names.getString(pkg, null) ?: ri.loadLabel(pm).toString(),
                     banner = ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm),
                     icon = ri.loadIcon(pm),
                 )

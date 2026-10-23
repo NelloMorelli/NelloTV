@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- screensaver delay (Personalizza); granted via adb appops -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- headphones: scan, pair, connect -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
@@ -81,6 +83,11 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/wake_service" />
         </service>
+
+        <activity
+            android:name=".CustomizeActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
 
         <activity
             android:name=".BluetoothActivity"
