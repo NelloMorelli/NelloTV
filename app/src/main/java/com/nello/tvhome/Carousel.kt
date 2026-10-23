@@ -139,12 +139,21 @@ class CarouselAdapter(
         private val wide = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         private val poster = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         private val logo = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_END; adjustViewBounds = true }
-        private val rank = TextView(ctx).apply {
-            textSize = 40f
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            setShadowLayer(12f, 0f, 2f, 0xCC000000.toInt())
-            setPadding(px(10), px(2), 0, 0)
+        // the same frosted glass numeral the wide Top 10 artwork has
+        private val rank = object : TextView(ctx) {
+            override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+                super.onSizeChanged(w, h, ow, oh)
+                paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, h.toFloat(),
+                    intArrayOf(0xFFF6F6F6.toInt(), 0xE6C4C4C4.toInt(), 0x99909090.toInt()), floatArrayOf(0f, 0.6f, 1f),
+                    android.graphics.Shader.TileMode.CLAMP)
+            }
+        }.apply {
+            textSize = 92f
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            includeFontPadding = false
+            letterSpacing = -0.06f
+            setShadowLayer(18f, 0f, 4f, 0x99000000.toInt())
+            setPadding(px(8), 0, 0, 0)
         }
         private val progressTrack = FrameLayout(ctx).apply { setBackgroundResource(R.drawable.progress_track) }
         private val progressFill = View(ctx).apply { background = Theme.progressFill(ctx) }

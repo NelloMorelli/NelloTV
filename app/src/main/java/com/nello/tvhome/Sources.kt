@@ -22,8 +22,26 @@ object Tmdb {
                 "tv" -> "series"
                 else -> return@mapNotNull null
             }
+            if (isAnime(o)) return@mapNotNull null
             parse(o, kind)
         }.filter { it.backdrop != null }
+    }
+
+    /** Japanese animation: hidden from every carousel. */
+    private fun isAnime(o: JSONObject): Boolean {
+        val g = o.optJSONArray("genre_ids") ?: return false
+        return o.optString("original_language") == "ja" && (0 until g.length()).any { g.optInt(it) == 16 }
+    }
+
+    private val animeCache = HashMap<String, Boolean>()
+
+    /** Same, for a title known only by its IMDb id (Top 10 lists). Cached. */
+    suspend fun isAnime(imdbId: String): Boolean = animeCache.getOrPut(imdbId) {
+        runCatching {
+            val r = JSONObject(Net.get(url("/find/$imdbId", "&external_source=imdb_id")))
+            val hit = r.optJSONArray("movie_results")?.optJSONObject(0) ?: r.optJSONArray("tv_results")?.optJSONObject(0)
+            hit != null && isAnime(hit)
+        }.getOrDefault(false)
     }
 
     /** Title search; keeps results without a backdrop, falling back to the poster. */
@@ -74,7 +92,8 @@ object Tmdb {
     /** "If you liked X": TMDB recommendations for a title. */
     suspend fun recommendations(type: String, tmdbId: Int): List<MediaItem> {
         val results = JSONObject(Net.get(url("/${tmdbType(type)}/$tmdbId/recommendations"))).optJSONArray("results") ?: JSONArray()
-        return (0 until results.length()).map { parse(results.getJSONObject(it), type) }.filter { it.backdrop != null }
+        return (0 until results.length()).map { results.getJSONObject(it) }.filterNot { isAnime(it) }
+            .map { parse(it, type) }.filter { it.backdrop != null }
     }
 
     private val logoCache = HashMap<String, String?>()
@@ -167,8 +186,12 @@ object TopX {
     suspend fun catalog(type: String, service: String): List<MediaItem> {
         val json = JSONObject(Net.get("${BuildConfig.TOPX_BASE}/catalog/$type/tx.$type.${service}_topx.json"))
         val metas = json.optJSONArray("metas") ?: return emptyList()
-        return (0 until metas.length()).map { i ->
+        return (0 until metas.length()).mapNotNull { i ->
             val m = metas.getJSONObject(i)
+            // animated titles: ask TMDB whether they're anime (keeps Arcane, Pixar…)
+            val animated = m.optJSONArray("links")?.let { l -> (0 until l.length()).any { l.optJSONObject(it)?.optString("name") == "Animazione" } } == true
+            val imdb = m.str("id")?.takeIf { it.startsWith("tt") }
+            if (animated && imdb != null && Tmdb.isAnime(imdb)) return@mapNotNull null
             MediaItem(
                 title = m.optString("name"),
                 type = type,

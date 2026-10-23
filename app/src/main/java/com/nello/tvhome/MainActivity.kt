@@ -1308,7 +1308,7 @@ class MainActivity : ComponentActivity(), Host {
                 byKey[k] = m
                 val seed = seeds[lists.indexOf(l)]
                 if (w > (because[k]?.second ?: -1.0)) {
-                    val verb = if (seed.tmdbId in inProgress) "stai guardando" else "hai in libreria"
+                    val verb = if (seed.tmdbId in inProgress) "hai guardato" else "hai in libreria"
                     because[k] = "Perché $verb ${seed.title}" to w
                 }
             }
@@ -1529,7 +1529,7 @@ class MainActivity : ComponentActivity(), Host {
         }
         val row = state.rows.getOrNull(index) ?: return
         catalogLabel.text = when {
-            explore -> if (refreshing) "Aggiorno…" else "⟳  Altri per te"
+            explore -> if (refreshing) "Aggiorno…" else "⟳  Per te"
             scrollsCatalogs(state.section) -> catalogLabelText(state, index)
             else -> "${row.title}  ▾"
         }
@@ -1736,6 +1736,8 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun onMediaFocusedInfo(item: MediaItem) {
         if (item.action == MediaItem.Action.LINK_NUVIO) setCarouselInfo("Collega Nuvio", "Premi OK per vedere qui i tuoi progressi")
+        // Per te: just the poster and why it's there
+        else if (current == Section.EXPLORE) setCarouselInfo(item.reason.orEmpty(), "")
         else setCarouselInfo(item.title, listOfNotNull(
             if (item.type == "movie") "Film" else "Serie TV",
             item.year,
@@ -1942,9 +1944,8 @@ class MainActivity : ComponentActivity(), Host {
         startActivity(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
 
     override fun onTvFocused(show: TvShow) {
-        val where = apps.get(listOf(show.channel.app)).firstOrNull()?.label ?: "app"
         setCarouselInfo("${show.channel.name} · ${show.title}",
-            listOfNotNull("${TvGuide.time(show.start)} – ${TvGuide.time(show.stop)}", show.category, if (show.isOn) "In onda" else null, "OK apre $where").joinToString(" · "))
+            listOfNotNull("${TvGuide.time(show.start)} – ${TvGuide.time(show.stop)}", show.category, if (show.isOn) "In onda" else null).joinToString(" · "))
     }
 
     /** OK on a programme: the channel's app (RaiPlay, Mediaset Infinity, or NeroZone for the rest). */

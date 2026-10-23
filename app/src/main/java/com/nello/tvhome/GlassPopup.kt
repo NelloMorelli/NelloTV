@@ -110,8 +110,20 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
 
     /** A pill button; by default it closes the pop-up after running. */
     fun button(text: String, keepOpen: Boolean = false, action: () -> Unit): TextView {
+        // "✓  Name" marks the chosen option: shown as a small dot at the end instead of a tick
+        val selected = text.startsWith("✓")
         val b = TextView(context).apply {
-            this.text = text
+            this.text = text.removePrefix("✓").trim()
+            if (selected) {
+                setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(android.graphics.Color.WHITE)
+                    setSize(px(8), px(8))
+                }, null)
+                compoundDrawablePadding = px(10)
+                compoundDrawableTintList = context.getColorStateList(R.color.tab_text)
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            }
             textSize = 14f
             isFocusable = true
             isClickable = true
