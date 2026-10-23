@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity(), Host {
         val dp = resources.displayMetrics.density
         carousel.layoutParams = carousel.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
         findViewById<View>(R.id.clockTop).visibility = if (Theme.showClock) View.VISIBLE else View.INVISIBLE
-        val hidden = CustomizeActivity.hiddenTabs(this)
+        val hidden = Customize.hiddenTabs(this)
         tabs.forEachIndexed { i, t -> t.visibility = if (Section.entries[i].name in hidden) View.GONE else View.VISIBLE }
     }
 
@@ -383,7 +383,11 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
-    private fun openSettings() = openPage(Intent(this, SettingsActivity::class.java))
+    /** Settings: a full screen of their own, fading in over the home. */
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
 
     private fun openConnectionDetails() = openPage(Intent(this, ConnectionActivity::class.java))
 
@@ -769,7 +773,7 @@ class MainActivity : ComponentActivity(), Host {
     // ---------------------------------------------------------------- sections
 
     private fun specs(section: Section): List<Spec> {
-        val hidden = CustomizeActivity.hiddenCatalogs(this)
+        val hidden = Customize.hiddenCatalogs(this)
         return allSpecs(section).filter { it.key !in hidden }
     }
 

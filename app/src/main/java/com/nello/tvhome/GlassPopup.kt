@@ -656,16 +656,35 @@ class LiquidList(context: Context) : LinearLayout(context) {
 
     init { setWillNotDraw(false) }
 
+    /** when the focus is elsewhere, keep a faint pill on the last row (e.g. the current section) */
+    var keepSelected = false
+
     // any row that takes the focus gets the pill (pages add their own rows too)
     override fun requestChildFocus(child: View?, focused: View?) {
         super.requestChildFocus(child, focused)
         if (child != null && child === focused) pillTo(child)
+        invalidate()
+    }
+
+    // focus moving elsewhere doesn't notify this list: redraw on any focus change in the window
+    private val focusWatcher = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, _ -> invalidate() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnGlobalFocusChangeListener(focusWatcher)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnGlobalFocusChangeListener(focusWatcher)
+        super.onDetachedFromWindow()
     }
 
     fun pillTo(v: View) {
         end.set(v.left.toFloat(), v.top.toFloat(), v.right.toFloat(), v.bottom.toFloat())
+        // not laid out yet: wait for a real placement
+        if (end.isEmpty) return
         anim?.cancel()
-        if (!shown) {
+        if (!shown || pill.isEmpty) {
             // first time: it grows out of the row's centre
             shown = true
             pill.set(end)
@@ -677,6 +696,7 @@ class LiquidList(context: Context) : LinearLayout(context) {
             }
             return
         }
+        grow = 1f
         start.set(pill)
         val down = end.top > start.top
         anim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
@@ -703,7 +723,15 @@ class LiquidList(context: Context) : LinearLayout(context) {
     }
 
     override fun dispatchDraw(canvas: android.graphics.Canvas) {
-        if (!shown || !hasFocus()) { super.dispatchDraw(canvas); return }
+        if (!shown) { super.dispatchDraw(canvas); return }
+        if (!hasFocus()) {
+            if (keepSelected) {
+                paint.color = 0x2EFFFFFF
+                canvas.drawRoundRect(pill, pill.height() / 2, pill.height() / 2, paint)
+            }
+            super.dispatchDraw(canvas)
+            return
+        }
         val r = current()
         val radius = r.height() / 2
         paint.color = (((0xF2 * minOf(1f, grow * 1.4f)).toInt()) shl 24) or (Theme.accent and 0xFFFFFF)

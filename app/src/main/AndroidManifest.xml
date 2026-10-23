@@ -87,12 +87,6 @@
         </service>
 
         <activity
-            android:name=".CustomizeActivity"
-            android:theme="@style/Theme.NelloTV.Page"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <activity
             android:name=".BluetoothActivity"
             android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
@@ -118,7 +112,6 @@
 
         <activity
             android:name=".SettingsActivity"
-            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
     </application>
