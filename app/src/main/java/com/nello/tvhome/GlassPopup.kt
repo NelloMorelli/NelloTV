@@ -221,69 +221,84 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     }
 
     // ---------------------------------------------------------------- liquid open / close
-    // Soft and continuous: the card is glass from the first frame and simply fades in while its
-    // outline flows down from the button's corner to its full size (the lower edge leading, the
-    // far side following), so there's no colour jump or hard edge to notice. Closing reverses it.
+    // The pill turns into the pop-up. Frame one is an exact copy of the focused button (its white
+    // and its icon, from a snapshot), so nothing jumps when the window appears; then a single
+    // continuous motion stretches it into the card while the white slowly melts into glass and the
+    // icon fades in the corner it rides along. Closing runs it backwards and ends on the button.
 
-    private val flow = android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f)
-    private val follow = android.view.animation.PathInterpolator(0.33f, 0.9f, 0.3f, 1.02f)
-    private val settle = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+    private val morph = android.view.animation.PathInterpolator(0.32f, 0.72f, 0.0f, 1f)
     private var shapeAnim: android.animation.ValueAnimator? = null
-    private var alignRight = true
+    private var from = android.graphics.RectF()
+    private var fromRadius = 0f
 
-    /** The card's outline at progress t (0 = a smaller card tucked under the button, 1 = full). */
     private fun shapeAt(t: Float) {
-        val w = card.width.toFloat()
-        val top = card.contentTop.toFloat()
-        val full = card.height - top
-        val down = flow.getInterpolation(t)
-        val side = follow.getInterpolation(t)
-        // starts 62% wide (on the button's side) and 45% tall
-        val startW = w * 0.62f
-        val width = startW + (w - startW) * side
-        val height = full * (0.45f + 0.55f * down)
-        card.shape = if (alignRight) android.graphics.RectF(w - width, top, w, top + height)
-        else android.graphics.RectF(0f, top, width, top + height)
-        card.shapeRadius = card.radius
+        val to = android.graphics.RectF(0f, card.contentTop.toFloat(), card.width.toFloat(), card.height.toFloat())
+        val k = morph.getInterpolation(t)
+        // the bottom runs a touch ahead of the sides: it reads as flowing out of the pill
+        val kb = morph.getInterpolation((t * 1.12f).coerceAtMost(1f))
+        fun mix(a: Float, b: Float, x: Float) = a + (b - a) * x
+        val shape = android.graphics.RectF(mix(from.left, to.left, k), mix(from.top, to.top, k), mix(from.right, to.right, k), mix(from.bottom, to.bottom, kb))
+        card.shape = shape
+        card.shapeRadius = mix(fromRadius, card.radius, k)
+        // white → glass over the first 35%, smoothly (glass by the time it's big)
+        val w = (1f - t / 0.35f).coerceIn(0f, 1f)
+        card.whiteness = w * w * (3 - 2 * w)
+        // the icon stays pinned to the shape's corner on the button's side, fading out early
+        card.iconAlpha = (1f - t / 0.25f).coerceIn(0f, 1f)
+        card.iconRect.set(shape.right - from.width(), shape.top, shape.right, shape.top + from.height())
     }
 
-    private fun pourFrom(anchor: View, alignEnd: Boolean) {
-        alignRight = alignEnd
-        card.alpha = 0f
+    private fun pourFrom(anchor: View, @Suppress("UNUSED_PARAMETER") alignEnd: Boolean) {
         scroller.alpha = 0f
+        card.shape = android.graphics.RectF()
+        // the button exactly as it looks now (focused: white with the dark icon)
+        card.icon = runCatching {
+            android.graphics.Bitmap.createBitmap(anchor.width, anchor.height, android.graphics.Bitmap.Config.ARGB_8888).also {
+                anchor.draw(android.graphics.Canvas(it))
+            }
+        }.getOrNull()
         card.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 card.viewTreeObserver.removeOnPreDrawListener(this)
+                val a = IntArray(2).also { anchor.getLocationOnScreen(it) }
+                val c = IntArray(2).also { card.getLocationOnScreen(it) }
+                val w = anchor.width * anchor.scaleX
+                val h = anchor.height * anchor.scaleY
+                // getLocationOnScreen already includes the focus zoom around the centre
+                from = android.graphics.RectF(a[0] - c[0].toFloat(), a[1] - c[1].toFloat(), a[0] - c[0] + w, a[1] - c[1] + h)
+                fromRadius = minOf(w, h) / 2f
                 shapeAt(0f)
-                // the window's first frame is slow: start once it's really on screen
+                // the window's first frame is slow: start once it's really on screen (until then
+                // it looks exactly like the button, so the wait is invisible)
                 card.postOnAnimation { card.postOnAnimation {
                     shapeAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-                        duration = 1000 // ≈500 ms at 0.5x
+                        duration = 1100 // ≈550 ms at 0.5x
                         interpolator = android.view.animation.LinearInterpolator()
                         addUpdateListener { shapeAt(it.animatedValue as Float) }
                         start()
                     }
-                    card.animate().alpha(1f).setDuration(640).setInterpolator(settle).start()
-                    scroller.translationY = -px(6).toFloat()
-                    scroller.animate().alpha(1f).translationY(0f).setStartDelay(220).setDuration(760).setInterpolator(flow).start()
+                    scroller.translationY = -px(8).toFloat()
+                    scroller.animate().alpha(1f).translationY(0f).setStartDelay(420).setDuration(640)
+                        .setInterpolator(android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)).start()
                 } }
                 return true
             }
         })
         exitAnimation = { done ->
+            val at = (shapeAnim?.animatedValue as? Float) ?: 1f
             shapeAnim?.cancel()
             scroller.animate().cancel()
             scroller.animate().alpha(0f).setStartDelay(0).setDuration(200).start()
-            val from = shapeAnim?.animatedValue as? Float ?: 1f
-            android.animation.ValueAnimator.ofFloat(from, 0f).apply {
-                duration = 440
-                interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.6f, 1f)
+            android.animation.ValueAnimator.ofFloat(at, 0f).apply {
+                duration = (820 * at).toLong().coerceAtLeast(200)
+                interpolator = android.view.animation.PathInterpolator(0.5f, 0f, 0.2f, 1f)
                 addUpdateListener { shapeAt(it.animatedValue as Float) }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    // back to an exact copy of the button: the real one takes over invisibly
+                    override fun onAnimationEnd(a: android.animation.Animator) { card.postOnAnimation { done() } }
+                })
                 start()
             }
-            card.animate().cancel()
-            card.animate().alpha(0f).setStartDelay(120).setDuration(320).setInterpolator(settle)
-                .withEndAction { card.postOnAnimation { done() } }.start()
         }
     }
 
@@ -497,6 +512,13 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
     var shape: android.graphics.RectF? = null
         set(v) { field = v; invalidate() }
     var shapeRadius = radius
+    /** 0..1: how much it still looks like the white focused button it grows out of */
+    var whiteness = 0f
+    /** the button's snapshot, drawn in [iconRect] at [iconAlpha] */
+    var icon: android.graphics.Bitmap? = null
+    var iconAlpha = 0f
+    val iconRect = android.graphics.RectF()
+    private val iconPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
     private val path = android.graphics.Path()
     private val rect = android.graphics.RectF()
     private val loc = IntArray(2)
@@ -545,8 +567,29 @@ class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
         frost.shader = null
         frost.color = 0x59000000
         canvas.drawRoundRect(rect, r, r, frost)
+        if (whiteness > 0f) {
+            frost.color = ((whiteness * 0xF2).toInt() shl 24) or (Theme.accent and 0xFFFFFF)
+            canvas.drawRoundRect(rect, r, r, frost)
+        }
+        border.alpha = ((1f - whiteness) * 0x4D).toInt()
         val h = border.strokeWidth / 2
         canvas.drawRoundRect(rect.left + h, rect.top + h, rect.right - h, rect.bottom - h, r, r, border)
+        icon?.let { b ->
+            if (iconAlpha <= 0f) return@let
+            // inked like under the selector pill: the button's own icon is white, the pill darkens it
+            val c = Theme.onAccent
+            iconPaint.colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+                0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
+                0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
+                0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
+                0f, 0f, 0f, 2.5f, 0f,
+            ))
+            iconPaint.alpha = (iconAlpha * 255).toInt()
+            canvas.save()
+            canvas.clipPath(android.graphics.Path().apply { addRoundRect(rect, r, r, android.graphics.Path.Direction.CW) })
+            canvas.drawBitmap(b, null, iconRect, iconPaint)
+            canvas.restore()
+        }
     }
 
     override fun dispatchDraw(canvas: android.graphics.Canvas) {
