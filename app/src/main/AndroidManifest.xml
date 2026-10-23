@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- switch the WireGuard tunnel on before sport events -->
+    <uses-permission android:name="com.wireguard.android.permission.CONTROL_TUNNELS" />
     <!-- screensaver delay (Personalizza); granted via adb appops -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- headphones: scan, pair, connect -->

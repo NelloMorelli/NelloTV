@@ -21,6 +21,11 @@ class LauncherPrefs(context: Context) {
         get() = p.getBoolean("screensaver", true)
         set(v) = p.edit().putBoolean("screensaver", v).apply()
 
+    /** WireGuard tunnel switched on before opening a sport event in Sportio (null = off) */
+    var sportVpn: String?
+        get() = if (p.contains("sportVpn")) p.getString("sportVpn", null) else "wgcf-profile"
+        set(v) = p.edit().putString("sportVpn", v).apply()
+
     var night: Boolean
         get() = p.getBoolean("night", false)
         set(v) = p.edit().putBoolean("night", v).apply()
@@ -131,6 +136,10 @@ class SettingsActivity : GlassPage() {
         }
         row("App VPN", LauncherPrefs.VPN_APPS.firstOrNull { it.first == prefs.vpnPackage }?.second ?: "Da scegliere") {
             choose(it, "App VPN", installedVpns(), prefs.vpnPackage) { v -> prefs.vpnPackage = v }
+        }
+        row("WireGuard per lo sport", prefs.sportVpn?.let { "Attiva · $it" } ?: "Spenta") {
+            prefs.sportVpn = if (prefs.sportVpn == null) "wgcf-profile" else null
+            build()
         }
         row("Account Nuvio", if (nuvio.isLinked) "Collegato · profilo ${nuvio.profileIndex}" else "Non collegato") { nuvioAccount(it) }
 

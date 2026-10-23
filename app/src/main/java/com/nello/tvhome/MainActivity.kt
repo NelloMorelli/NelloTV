@@ -1816,19 +1816,28 @@ class MainActivity : ComponentActivity(), Host {
         if (match.state == "post") { onMatchDetails(match); return }
         lifecycleScope.launch {
             val channel = Sportio.channelFor(this@MainActivity, match)
-            openOnSportio(channel, match.startMillis, "${match.home} – ${match.away}")
+            openOnSportio(channel, "${match.home} – ${match.away}")
         }
     }
 
-    /** Starts within half an hour (or already on): play the channel. Later: just say where. */
-    private fun openOnSportio(channel: String, start: Long, what: String) {
-        when {
-            !Sportio.installed(this) -> toast("Sportio non è installato")
-            start - System.currentTimeMillis() > 30 * 60_000L -> toast("$what alle ${Espn.kickoff(start)} su $channel")
-            else -> {
-                toast("$what su $channel")
-                Sportio.play(this, channel)
-            }
+    /** Sportio on the channel (even before kick-off), with WireGuard switched on first. */
+    private fun openOnSportio(channel: String, what: String) {
+        if (!Sportio.installed(this)) { toast("Sportio non è installato"); return }
+        val tunnel = prefs.sportVpn
+        if (tunnel == null) {
+            toast("$what su $channel")
+            Sportio.play(this, channel)
+            return
+        }
+        if (checkSelfPermission(Sportio.WG_PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Sportio.WG_PERMISSION), 7)
+            toast("Consenti a Nello TV di attivare WireGuard, poi riprova")
+            return
+        }
+        toast("$what su $channel · attivo WireGuard…")
+        lifecycleScope.launch {
+            if (!Sportio.wireguardUp(this@MainActivity, tunnel)) toast("WireGuard non si è attivato, apro comunque")
+            Sportio.play(this@MainActivity, channel)
         }
     }
 
@@ -1866,7 +1875,7 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     override fun onRaceClicked(race: RaceSession) =
-        openOnSportio(Sportio.channelFor(race), race.startMillis, "${race.session} · ${race.grandPrix}")
+        openOnSportio(Sportio.channelFor(race), "${race.session} · ${race.grandPrix}")
 
     /** the tile the spotlight flies out of (and back into) */
     private var spotlightSource: View? = null

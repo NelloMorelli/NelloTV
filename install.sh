@@ -16,6 +16,8 @@ adb shell pm grant com.nello.tvhome android.permission.WRITE_SECURE_SETTINGS
 # lets it install its own updates
 adb shell appops set com.nello.tvhome REQUEST_INSTALL_PACKAGES allow
 adb shell appops set com.nello.tvhome WRITE_SETTINGS allow
+adb shell pm grant com.nello.tvhome com.wireguard.android.permission.CONTROL_TUNNELS || true
+adb shell cmd deviceidle whitelist +com.wireguard.android || true
 CUR=$(adb shell settings get secure enabled_accessibility_services | tr -d '\r')
 case "$CUR" in
   *com.nello.tvhome*) ;;

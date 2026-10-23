@@ -2,7 +2,10 @@ package com.nello.tvhome
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import kotlinx.coroutines.delay
 
 /**
  * Sport events open in Sportio (IPTV) on the channel that shows them. The channel comes from the
@@ -40,6 +43,30 @@ object Sportio {
     )
 
     fun installed(c: Context) = runCatching { c.packageManager.getPackageInfo(PKG, 0) }.isSuccess
+
+    // WireGuard ("Consenti app di controllo remoto" on, CONTROL_TUNNELS granted to us)
+    private const val WIREGUARD = "com.wireguard.android"
+    const val WG_PERMISSION = "com.wireguard.android.permission.CONTROL_TUNNELS"
+
+    private fun vpnUp(c: Context): Boolean {
+        val cm = c.getSystemService(ConnectivityManager::class.java)
+        return cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true }
+    }
+
+    /** Turn the WireGuard tunnel on (if it isn't) and wait up to 5 s for it. False if it didn't come up. */
+    suspend fun wireguardUp(c: Context, tunnel: String): Boolean {
+        if (vpnUp(c)) return true
+        runCatching {
+            c.sendBroadcast(Intent("com.wireguard.android.action.SET_TUNNEL_UP")
+                .setClassName(WIREGUARD, "com.wireguard.android.model.TunnelManager\$IntentReceiver")
+                .putExtra("tunnel", tunnel))
+        }
+        repeat(25) {
+            delay(200)
+            if (vpnUp(c)) return true
+        }
+        return false
+    }
 
     fun play(c: Context, channel: String): Boolean = runCatching {
         c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sportio://play/live?sourceId=$SOURCE&name=${Uri.encode(channel)}"))
