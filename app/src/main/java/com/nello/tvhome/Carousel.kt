@@ -35,6 +35,8 @@ class CarouselAdapter(
         const val HEIGHT = 210
         const val POSTER_W = 140
         const val WIDE_W = 373
+        /** the other cards, next to the first (selected) one */
+        const val SMALL = 0.78f
         private const val MEDIA = 0
         private const val MATCH = 1
         private const val APP = 2
@@ -76,7 +78,10 @@ class CarouselAdapter(
                     outline.setRoundRect(0, 0, view.width, view.height, 14 * dp)
                 }
             }
-            layoutParams = RecyclerView.LayoutParams(px(if (viewType == MEDIA) POSTER_W else WIDE_W), px(HEIGHT)).apply { marginEnd = px(16) }
+            layoutParams = RecyclerView.LayoutParams((px(if (viewType == MEDIA) POSTER_W else WIDE_W) * SMALL).toInt(), (px(HEIGHT) * SMALL).toInt()).apply {
+                marginEnd = px(16)
+                topMargin = ((px(HEIGHT) * (1 - SMALL)) / 2).toInt()
+            }
         }
         return VH(card, viewType)
     }
@@ -92,6 +97,7 @@ class CarouselAdapter(
             is RaceSession -> h.bindRace(item)
             is TvShow -> h.bindTv(item)
         }
+        if (item !is MediaItem) h.setExpanded(position == active, animate = false)
         h.itemView.setOnFocusChangeListener { v, has ->
             v.animate().scaleX(if (has) 1.04f else 1f).scaleY(if (has) 1.04f else 1f)
                 .setDuration(440).setInterpolator(DecelerateInterpolator(1.4f)).start()
@@ -375,29 +381,51 @@ class CarouselAdapter(
             setExpanded(expanded, animate = false)
         }
 
-        /** Wide landscape card ⇄ vertical poster, animating width and crossfading the images. */
+        private var expandedNow = -1f
+
+        /** Width and height between "other card" (0) and "first, selected card" (1), centred. */
+        private fun size(f: Float) {
+            val bigW = px(WIDE_W).toFloat()
+            val smallW = px(if (type == MEDIA) POSTER_W else WIDE_W) * SMALL
+            val bigH = px(HEIGHT).toFloat()
+            val smallH = bigH * SMALL
+            val h = smallH + (bigH - smallH) * f
+            card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply {
+                width = (smallW + (bigW - smallW) * f).toInt()
+                height = h.toInt()
+                topMargin = ((bigH - h) / 2).toInt()
+            }
+        }
+
+        /**
+         * The first (selected) card is the big one: wide and full height. The others are smaller
+         * (posters for films and series), vertically centred. Animated as the selection moves.
+         */
         fun setExpanded(expanded: Boolean, animate: Boolean) {
-            if (type != MEDIA) return
-            val target = px(if (expanded) WIDE_W else POSTER_W)
+            val target = if (expanded) 1f else 0f
             widthAnim?.cancel()
             val posterAlpha = if (expanded) 0f else 1f
             val wideAlpha = if (expanded) 1f else 0f
-            if (!animate) {
-                card.layoutParams = card.layoutParams.apply { width = target }
-                poster.alpha = posterAlpha
-                rank.alpha = posterAlpha
-                logo.alpha = wideAlpha
+            if (!animate || expandedNow < 0f) {
+                expandedNow = target
+                size(target)
+                if (type == MEDIA) {
+                    poster.alpha = posterAlpha
+                    rank.alpha = posterAlpha
+                    logo.alpha = wideAlpha
+                }
                 return
             }
-            val from = card.layoutParams.width
-            widthAnim = ValueAnimator.ofInt(from, target).apply {
+            widthAnim = ValueAnimator.ofFloat(expandedNow, target).apply {
                 duration = 560 // ≈280 ms at 0.5x animation scale
                 interpolator = DecelerateInterpolator(1.6f)
                 addUpdateListener {
-                    card.layoutParams = card.layoutParams.apply { width = it.animatedValue as Int }
+                    expandedNow = it.animatedValue as Float
+                    size(expandedNow)
                 }
                 start()
             }
+            if (type != MEDIA) return
             poster.animate().alpha(posterAlpha).setDuration(560).start()
             // the wide Top 10 artwork already shows its number
             rank.animate().alpha(posterAlpha).setDuration(560).start()
