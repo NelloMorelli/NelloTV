@@ -91,7 +91,8 @@ object TvGuide {
     }
 
     private fun parse(f: File): List<TvShow> {
-        val byId = channels.associateBy { it.id }
+        // the TV tab's channels plus the sports ones (to find which channel shows a match)
+        val byId = channels.associateBy { it.id } + Sportio.channels.filter { it.id !in channels.map { c -> c.id } }.associateBy { it.id }
         val logos = HashMap<String, String>()
         val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
         val now = System.currentTimeMillis()

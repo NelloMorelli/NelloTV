@@ -1690,13 +1690,11 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
+    private var focusedMatch: String? = null
+
     override fun onMatchFocused(match: Match) {
         if (isSingle(current)) {
-            val whereText = when {
-                PrimeVideo.shows(match) -> "Prime Video"
-                match.state == "post" -> null
-                else -> "Nuvio"
-            }
+            focusedMatch = match.id
             val whenText = when (match.state) {
                 "in" -> "In diretta · ${match.detail}"
                 "post" -> "Finale ${match.homeScore ?: 0}-${match.awayScore ?: 0}"
@@ -1705,7 +1703,13 @@ class MainActivity : ComponentActivity(), Host {
                     (if (isToday) "Oggi" else Espn.dayLabel(match).replaceFirstChar { it.uppercase() }) + " ${Espn.kickoff(match)}"
                 }
             }
-            setCarouselInfo("${match.home} – ${match.away}", listOfNotNull(whenText, whereText, match.league.label).joinToString(" · "))
+            setCarouselInfo("${match.home} – ${match.away}", listOfNotNull(whenText, match.league.label).joinToString(" · "))
+            // then the channel it's on, once the guide has answered
+            if (match.state != "post") lifecycleScope.launch {
+                val channel = Sportio.channelFor(this@MainActivity, match)
+                if (focusedMatch == match.id)
+                    setCarouselInfo("${match.home} – ${match.away}", listOf(whenText, channel, match.league.label).joinToString(" · "))
+            }
             return
         }
         heroJob?.cancel()
@@ -1720,12 +1724,8 @@ class MainActivity : ComponentActivity(), Host {
                     (if (isToday) "OGGI" else Espn.dayLabel(match).uppercase()) + " ORE ${Espn.kickoff(match)}"
                 }
             }
-            val action = when {
-                PrimeVideo.shows(match) -> "In esclusiva su Prime Video · premi OK per aprirlo"
-                match.state == "in" -> "Premi OK per aprirla in Nuvio"
-                match.state == "pre" -> "Disponibile in Nuvio dal calcio d'inizio"
-                else -> "Partita terminata"
-            }
+            val action = if (match.state == "post") "Partita terminata · OK per i dettagli"
+                else "Su ${Sportio.channelFor(this@MainActivity, match)} · OK per guardarla in Sportio"
             val details = listOfNotNull(match.venue, action).joinToString("\n")
             showInfo("${match.home} – ${match.away}", "${match.league.label.uppercase()}  ·  $whenText", details, null)
         }
@@ -1811,35 +1811,23 @@ class MainActivity : ComponentActivity(), Host {
         if (!apps.launch(app.pkg)) toast("Impossibile aprire ${app.label}")
     }
 
+    /** OK on a match: Sportio, on the channel showing it. Finished matches open their page. */
     override fun onMatchClicked(match: Match) {
-        if (current == Section.EXPLORE) {
-            // "Per te": always in Nuvio
-            when (match.state) {
-                "pre" -> toast("${match.home} – ${match.away} sarà in Nuvio dal calcio d'inizio (${Espn.kickoff(match)})")
-                "post" -> toast("Partita terminata")
-                else -> lifecycleScope.launch {
-                    val id = runCatching { SportsAddon.findAnyMatch(match) }.getOrNull()
-                    when {
-                        id == null -> toast("Partita non ancora disponibile in Sports Streams, riprova tra poco")
-                        !apps.openNuvioContent(id, "sport") -> toast("Nuvio non è installato")
-                    }
-                }
-            }
-            return
+        if (match.state == "post") { onMatchDetails(match); return }
+        lifecycleScope.launch {
+            val channel = Sportio.channelFor(this@MainActivity, match)
+            openOnSportio(channel, match.startMillis, "${match.home} – ${match.away}")
         }
-        if (PrimeVideo.shows(match)) {
-            if (!apps.launch(PrimeVideo.PKG)) toast("Prime Video non è installato")
-            return
-        }
-        when (match.state) {
-            "pre" -> toast("${match.home} – ${match.away} sarà in Nuvio dal calcio d'inizio (${Espn.kickoff(match)})")
-            "post" -> toast("Partita terminata")
-            else -> lifecycleScope.launch {
-                val addonId = runCatching { SportsAddon.findId(match) }.getOrNull()
-                when {
-                    addonId == null -> toast("Partita non ancora disponibile in Sports Streams, riprova tra poco")
-                    !apps.openNuvioContent(addonId, "sport") -> toast("Nuvio non è installato")
-                }
+    }
+
+    /** Starts within half an hour (or already on): play the channel. Later: just say where. */
+    private fun openOnSportio(channel: String, start: Long, what: String) {
+        when {
+            !Sportio.installed(this) -> toast("Sportio non è installato")
+            start - System.currentTimeMillis() > 30 * 60_000L -> toast("$what alle ${Espn.kickoff(start)} su $channel")
+            else -> {
+                toast("$what su $channel")
+                Sportio.play(this, channel)
             }
         }
     }
@@ -1874,22 +1862,11 @@ class MainActivity : ComponentActivity(), Host {
             else -> (if (isToday) "Oggi" else day.format(race.startMillis).replaceFirstChar { it.uppercase() }) + " ${Espn.kickoff(race.startMillis)}"
         }
         val prefix = if (current == Section.EXPLORE) "Ferrari · " else ""
-        setCarouselInfo("$prefix${race.grandPrix}", "${race.session} · $whenText · Nuvio · Formula 1")
+        setCarouselInfo("$prefix${race.grandPrix}", "${race.session} · $whenText · ${Sportio.channelFor(race)} · Formula 1")
     }
 
-    override fun onRaceClicked(race: RaceSession) {
-        if (race.state == "pre") {
-            toast("${race.session} del ${race.grandPrix} in Nuvio dalle ${Espn.kickoff(race.startMillis)}")
-            return
-        }
-        lifecycleScope.launch {
-            val id = runCatching { SportsAddon.findRace(race) }.getOrNull()
-            when {
-                id == null -> toast("Sessione non ancora disponibile in Sports Streams, riprova tra poco")
-                !apps.openNuvioContent(id, "sport") -> toast("Nuvio non è installato")
-            }
-        }
-    }
+    override fun onRaceClicked(race: RaceSession) =
+        openOnSportio(Sportio.channelFor(race), race.startMillis, "${race.session} · ${race.grandPrix}")
 
     /** the tile the spotlight flies out of (and back into) */
     private var spotlightSource: View? = null
