@@ -15,8 +15,6 @@ import kotlinx.coroutines.delay
  */
 object Sportio {
     const val PKG = "tv.sportio.app"
-    /** the playlist in Sportio with the "TOP ITALIA" channel names */
-    private const val SOURCE = 5
 
     /** guide channel id → exact channel name in the Sportio playlist, in order of preference */
     val channels = listOf(
@@ -44,8 +42,10 @@ object Sportio {
 
     fun installed(c: Context) = runCatching { c.packageManager.getPackageInfo(PKG, 0) }.isSuccess
 
+    fun wireguardInstalled(c: Context) = runCatching { c.packageManager.getPackageInfo(WIREGUARD, 0) }.isSuccess
+
     // WireGuard ("Consenti app di controllo remoto" on, CONTROL_TUNNELS granted to us)
-    private const val WIREGUARD = "com.wireguard.android"
+    const val WIREGUARD = "com.wireguard.android"
     const val WG_PERMISSION = "com.wireguard.android.permission.CONTROL_TUNNELS"
 
     private fun vpnUp(c: Context): Boolean {
@@ -85,14 +85,14 @@ object Sportio {
 
     /** WireGuard (if set and allowed), then the channel. */
     suspend fun watch(c: Context, channel: String) {
-        val tunnel = LauncherPrefs(c).sportVpn
+        val tunnel = LauncherPrefs(c).sportVpn?.takeIf { wireguardInstalled(c) }
         if (tunnel != null && c.checkSelfPermission(WG_PERMISSION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
             wireguardUp(c, tunnel)
         play(c, channel)
     }
 
     fun play(c: Context, channel: String): Boolean = runCatching {
-        c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sportio://play/live?sourceId=$SOURCE&name=${Uri.encode(channel)}"))
+        c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("sportio://play/live?sourceId=${LauncherPrefs(c).sportioSource}&name=${Uri.encode(channel)}"))
             .setPackage(PKG).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }.isSuccess
 

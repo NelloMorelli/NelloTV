@@ -16,6 +16,8 @@ import android.widget.TextClock
 import android.widget.TextView
 import android.view.inputmethod.EditorInfo
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /** Launcher preferences, read by MainActivity on resume. */
 class LauncherPrefs(context: Context) {
@@ -35,6 +37,31 @@ class LauncherPrefs(context: Context) {
     var sportVpn: String?
         get() = if (p.contains("sportVpn")) p.getString("sportVpn", null) else "wgcf-profile"
         set(v) = p.edit().putString("sportVpn", v).apply()
+
+    /** favourite football team (ESPN id and name); null = none */
+    var teamId: String?
+        get() = if (p.contains("teamId")) p.getString("teamId", null) else "114"
+        set(v) = p.edit().putString("teamId", v).apply()
+    var teamName: String?
+        get() = if (p.contains("teamName")) p.getString("teamName", null) else "Napoli"
+        set(v) = p.edit().putString("teamName", v).apply()
+    /** F1 team followed in Per te and reminders; null = none */
+    var f1Team: String?
+        get() = if (p.contains("f1Team")) p.getString("f1Team", null) else "Ferrari"
+        set(v) = p.edit().putString("f1Team", v).apply()
+    /** Sportio's number for the playlist with the channels */
+    var sportioSource: Int
+        get() = p.getInt("sportioSource", 5)
+        set(v) = p.edit().putInt("sportioSource", v).apply()
+    /** where the first-start setup was left */
+    var onboardingStep: Int
+        get() = p.getInt("onboardingStep", 0)
+        set(v) = p.edit().putInt("onboardingStep", v).apply()
+
+    /** first-start setup done (an existing install counts as done) */
+    var onboarded: Boolean
+        get() = p.getBoolean("onboarded", p.all.isNotEmpty())
+        set(v) = p.edit().putBoolean("onboarded", v).apply()
 
     /** Nello TV replaces Amazon's home (Home button included) */
     var replaceHome: Boolean
@@ -340,6 +367,12 @@ class SettingsActivity : ComponentActivity() {
             }
             p.showUnder(it)
         }
+        row("Configurazione iniziale", "Permessi, squadra, canali ›") {
+            // until it's finished again, Home brings it back
+            prefs.onboarded = false
+            prefs.onboardingStep = 0
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        }
         row("Aggiornamenti", "Versione ${Updater.name()}") {
             // the check runs on the home screen, where its pop-up lives
             startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_CHECK_UPDATE))
@@ -435,6 +468,26 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun sportAndTv() {
+        header("Le tue squadre")
+        row("Squadra del cuore", prefs.teamName ?: "Nessuna") { v ->
+            lifecycleScope.launch {
+                val teams = runCatching { Espn.serieATeams() }.getOrElse { emptyList() }
+                choose(v, "Squadra del cuore", listOf("" to "Nessuna") + teams, prefs.teamId ?: "") { id ->
+                    prefs.teamId = id.ifEmpty { null }
+                    prefs.teamName = teams.firstOrNull { it.first == id }?.second
+                }
+            }
+        }
+        val f1 = listOf("Ferrari", "McLaren", "Red Bull", "Mercedes", "Aston Martin", "Williams", "Alpine", "Racing Bulls", "Haas", "Audi", "Cadillac")
+        row("Scuderia F1", prefs.f1Team ?: "Nessuna") { v ->
+            choose(v, "Scuderia F1", listOf("" to "Nessuna") + f1.map { it to it }, prefs.f1Team ?: "") { prefs.f1Team = it.ifEmpty { null } }
+        }
+        header("Sportio")
+        row("Playlist Sportio", "Numero ${prefs.sportioSource}") { v ->
+            pick(v, "Playlist Sportio", (1..10).map { "Playlist $it" }, prefs.sportioSource - 1) { i -> prefs.sportioSource = i + 1 }
+        }
+        row("Prova: apri RAI 1", "›") { Sportio.play(this, "RAI 1") }
+        note("Se Sportio apre la lista dei canali invece di RAI 1, scegli un altro numero di playlist.")
         header("Sport e canali")
         row("WireGuard per lo sport", prefs.sportVpn?.let { "Attiva · $it" } ?: "Spenta") {
             prefs.sportVpn = if (prefs.sportVpn == null) "wgcf-profile" else null

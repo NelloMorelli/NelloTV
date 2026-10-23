@@ -237,6 +237,7 @@ class MainActivity : ComponentActivity(), Host {
         tickLiveScores()
 
         onBackPressedDispatcher.addCallback(this) { goTop() }
+
         // a new day since the launcher last ran: the first load already uses the new batch
         rollover()
         // back where you were if the launcher was closed while you were in an app
@@ -775,6 +776,11 @@ class MainActivity : ComponentActivity(), Host {
         scheduleNightly()
         // back from Sportio: the VPN we switched on goes off again
         Sportio.wireguardDownIfOurs(this)
+        // first-start setup not finished (new Fire TV, or Home pressed during it): it comes first
+        if (!prefs.onboarded) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            overridePendingTransition(0, 0)
+        }
         // something changed in Personalizza: rebuild the home with it
         if (Theme.signature(this) != themeSig || appNamesSig != getSharedPreferences("app_names", MODE_PRIVATE).all.toString()) {
             recreate()
@@ -1236,8 +1242,8 @@ class MainActivity : ComponentActivity(), Host {
 
     /** "Per te": today's Napoli matches and Ferrari's F1 sessions, then films and series alternated. */
     private suspend fun perTe(): List<Any> = kotlinx.coroutines.coroutineScope {
-        val napoli = async { runCatching { Espn.napoliToday() }.getOrElse { emptyList() }.filter { it.state != "post" } }
-        val f1 = async { runCatching { Espn.f1Today() }.getOrElse { emptyList() }.filter { it.state != "post" } }
+        val napoli = async { runCatching { Espn.teamToday(prefs.teamId) }.getOrElse { emptyList() }.filter { it.state != "post" } }
+        val f1 = async { if (prefs.f1Team == null) emptyList() else runCatching { Espn.f1Today() }.getOrElse { emptyList() }.filter { it.state != "post" } }
         val picks = async { runCatching { personalPicks() }.getOrElse { emptyList() } }
         val movies = async {
             picks.await().filter { it.type == "movie" }.ifEmpty { runCatching { Tmdb.list("/trending/movie/week", "movie", page = perTePage + 1) }.getOrElse { emptyList() } }
@@ -1658,7 +1664,7 @@ class MainActivity : ComponentActivity(), Host {
             p.button("Classifica Serie A") { openSportPage(SportPagesActivity.SERIE_A) }
             p.button("Classifica F1 · Piloti") { openSportPage(SportPagesActivity.F1_DRIVERS) }
             p.button("Classifica F1 · Costruttori") { openSportPage(SportPagesActivity.F1_TEAMS) }
-            p.button("Calendario Napoli") { openSportPage(SportPagesActivity.NAPOLI) }
+            prefs.teamName?.let { t -> p.button("Calendario $t") { openSportPage(SportPagesActivity.NAPOLI) } }
         }
         p.showUnder(catalogLabel)
     }
@@ -1975,7 +1981,8 @@ class MainActivity : ComponentActivity(), Host {
     /** Sportio on the channel (even before kick-off), with WireGuard switched on first. */
     private fun openOnSportio(channel: String, what: String) {
         if (!Sportio.installed(this)) { toast("Sportio non è installato"); return }
-        val tunnel = prefs.sportVpn
+        // no WireGuard on this Fire TV: just open the channel
+        val tunnel = prefs.sportVpn?.takeIf { Sportio.wireguardInstalled(this) }
         if (tunnel == null) {
             toast("$what su $channel")
             Sportio.play(this, channel)
@@ -2027,7 +2034,7 @@ class MainActivity : ComponentActivity(), Host {
             "post" -> "Conclusa"
             else -> (if (isToday) "Oggi" else day.format(race.startMillis).replaceFirstChar { it.uppercase() }) + " ${Espn.kickoff(race.startMillis)}"
         }
-        val prefix = if (current == Section.EXPLORE) "Ferrari · " else ""
+        val prefix = if (current == Section.EXPLORE) prefs.f1Team?.let { "$it · " }.orEmpty() else ""
         setCarouselInfo("$prefix${race.grandPrix}", "${race.session} · $whenText · ${Sportio.channelFor(race)} · Formula 1")
     }
 

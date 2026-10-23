@@ -48,7 +48,7 @@ class SportPagesActivity : GlassPage() {
                 SERIE_A -> { title("Classifica Serie A"); list.addView(loading); serieA() }
                 F1_DRIVERS -> { title("Formula 1 · Piloti"); list.addView(loading); f1(drivers = true) }
                 F1_TEAMS -> { title("Formula 1 · Costruttori"); list.addView(loading); f1(drivers = false) }
-                NAPOLI -> { title("Calendario Napoli"); list.addView(loading); napoli() }
+                NAPOLI -> { title("Calendario ${LauncherPrefs(this@SportPagesActivity).teamName.orEmpty()}"); list.addView(loading); napoli() }
                 MATCH -> { title("Partita"); list.addView(loading); match() }
             }
             list.removeView(loading)
@@ -120,10 +120,12 @@ class SportPagesActivity : GlassPage() {
             tableRow(
                 listOf(stat(e, "rank"), team, stat(e, "gamesPlayed"), stat(e, "wins"), stat(e, "ties"), stat(e, "losses"),
                     stat(e, "pointDifferential"), stat(e, "points")),
-                w, highlight = team.contains("Napoli"),
+                w, highlight = myTeam?.let { team.contains(it) } == true,
             )
         }
     }
+
+    private val myTeam get() = LauncherPrefs(this).teamName
 
     private suspend fun f1(drivers: Boolean) {
         val d = runCatching { JSONObject(Net.get("$V2/racing/f1/standings")) }.getOrNull()
@@ -138,7 +140,8 @@ class SportPagesActivity : GlassPage() {
         entries.forEach { e ->
             val name = (e.optJSONObject("athlete") ?: e.optJSONObject("team"))?.optString("displayName").orEmpty()
             val pts = stat(e, "championshipPts").ifEmpty { stat(e, "points") }
-            val ferrari = name.contains("Ferrari") || name in setOf("Charles Leclerc", "Lewis Hamilton")
+            val f1 = LauncherPrefs(this).f1Team
+            val ferrari = f1 != null && (name.contains(f1) || (f1 == "Ferrari" && name in setOf("Charles Leclerc", "Lewis Hamilton")))
             tableRow(listOf(stat(e, "rank"), name, pts), w, highlight = ferrari)
         }
     }
@@ -152,7 +155,7 @@ class SportPagesActivity : GlassPage() {
             leagues.map { (code, label) ->
                 async {
                     runCatching {
-                        JSONObject(Net.get("$SITE/soccer/$code/teams/114/schedule?fixture=true")).optJSONArray("events")?.objects().orEmpty()
+                        JSONObject(Net.get("$SITE/soccer/$code/teams/${LauncherPrefs(this@SportPagesActivity).teamId}/schedule?fixture=true")).optJSONArray("events")?.objects().orEmpty()
                             .map { Triple(it, label, iso.parse(it.getString("date"))!!.time) }
                     }.getOrElse { emptyList() }
                 }

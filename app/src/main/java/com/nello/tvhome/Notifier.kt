@@ -73,7 +73,8 @@ class Notifier(private val service: AccessibilityService) {
         // starting in 5–15 minutes (the check runs every 4)
         fun soon(start: Long) = start - now in 5 * 60_000L..15 * 60_000L
 
-        Espn.napoliToday().filter { it.state == "pre" && soon(it.startMillis) }.forEach { m ->
+        val prefs = LauncherPrefs(service)
+        Espn.teamToday(prefs.teamId).filter { it.state == "pre" && soon(it.startMillis) }.forEach { m ->
             if (once("m:${m.id}")) {
                 val channel = Sportio.channelFor(service, m)
                 show(
@@ -84,11 +85,12 @@ class Notifier(private val service: AccessibilityService) {
                 ) { Sportio.watch(service, channel) }
             }
         }
-        Espn.f1Today().filter { it.state == "pre" && soon(it.startMillis) }.forEach { r ->
+        val f1Team = prefs.f1Team
+        if (f1Team != null) Espn.f1Today().filter { it.state == "pre" && soon(it.startMillis) }.forEach { r ->
             if (once("f1:${r.grandPrix}:${r.sessionEn}")) {
                 val channel = Sportio.channelFor(r)
                 show(
-                    "Ferrari · ${r.grandPrix}",
+                    "$f1Team · ${r.grandPrix}",
                     "${r.session} tra ${(r.startMillis - now) / 60_000} min su $channel",
                     SportArt.forRace(r),
                     hint = "Premi OK per guardarla",

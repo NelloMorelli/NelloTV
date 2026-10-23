@@ -48,10 +48,17 @@ object Espn {
             .sortedWith(compareBy({ stateOrder(it.state) }, { it.startMillis }))
     }
 
-    private const val NAPOLI = "114"
+    /** Serie A teams (ESPN id, name), for choosing your team. */
+    suspend fun serieATeams(): List<Pair<String, String>> {
+        val o = JSONObject(Net.get("$BASE/ita.1/teams"))
+        val teams = o.getJSONArray("sports").getJSONObject(0).getJSONArray("leagues").getJSONObject(0).getJSONArray("teams")
+        return (0 until teams.length()).map { teams.getJSONObject(it).getJSONObject("team") }
+            .map { it.getString("id") to it.optString("shortDisplayName", it.optString("displayName")) }
+            .sortedBy { it.second }
+    }
 
-    /** Napoli's matches today (Rome time), in every competition. */
-    suspend fun napoliToday(): List<Match> = coroutineScope {
+    /** Your team's matches today (Rome time), in every competition. */
+    suspend fun teamToday(team: String?): List<Match> = if (team == null) emptyList() else coroutineScope {
         val cal = Calendar.getInstance(rome)
         val target = dayKey(cal.timeInMillis)
         val queryDays = listOf(-1, 0, 1).map { d ->
@@ -61,7 +68,7 @@ object Espn {
             .map { (league, day) -> async { runCatching { scoreboard(league, day) }.getOrElse { emptyList() } } }
             .awaitAll().flatten()
             .distinctBy { it.first.id }
-            .filter { (m, teamIds) -> dayKey(m.startMillis) == target && NAPOLI in teamIds }
+            .filter { (m, teamIds) -> dayKey(m.startMillis) == target && team in teamIds }
             .map { it.first }
             .sortedBy { it.startMillis }
     }
