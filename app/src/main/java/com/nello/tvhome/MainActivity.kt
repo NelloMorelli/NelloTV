@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     /** Order matches the tabs in the top bar. */
-    private enum class Section { SEARCH, EXPLORE, MOVIES, SERIES, SPORT }
+    private enum class Section { SEARCH, EXPLORE, MOVIES, SERIES, TV, SPORT }
 
     /** A row definition: a synchronous app list, or a suspend loader for media or matches. */
     private class Spec(
@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity(), Host {
         searchInput = findViewById(R.id.searchInput)
         tabs = listOf(
             findViewById(R.id.tabSearch), findViewById(R.id.tabExplore), findViewById(R.id.tabMovies),
-            findViewById(R.id.tabSeries), findViewById(R.id.tabSport),
+            findViewById(R.id.tabSeries), findViewById(R.id.tabTv), findViewById(R.id.tabSport),
         )
 
         page = findViewById(R.id.page)
@@ -259,7 +259,7 @@ class MainActivity : ComponentActivity(), Host {
     private fun preloadSections() {
         lifecycleScope.launch {
             delay(2_500)
-            for (section in listOf(Section.MOVIES, Section.SERIES, Section.SPORT)) {
+            for (section in listOf(Section.MOVIES, Section.SERIES, Section.TV, Section.SPORT)) {
                 if (states[section] == null) SectionState(section, specs(section)).also { states[section] = it; load(it) }
             }
         }
@@ -767,6 +767,10 @@ class MainActivity : ComponentActivity(), Host {
             "popular" to ("Popolari ora" to "/tv/popular"),
             "onair" to ("Nuovi episodi questa settimana" to "/tv/on_the_air"),
         ))
+        Section.TV -> listOf(
+            Spec("tv_now", "In onda ora", RowKind.MIXED, mixed = { TvGuide.onNow(TvGuide.shows(this)) }),
+            Spec("tv_prime", "Stasera", RowKind.MIXED, mixed = { TvGuide.primeTime(TvGuide.shows(this)) }),
+        )
         Section.SPORT -> sportSpecs()
     }
 
@@ -826,6 +830,8 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun maxAge(section: Section) = when (section) {
         Section.SPORT -> 2 * 60_000L
+        // "In onda ora" moves on every few minutes
+        Section.TV -> 5 * 60_000L
         else -> 30 * 60_000L
     }
 
@@ -926,7 +932,7 @@ class MainActivity : ComponentActivity(), Host {
         updateSearchTab()
         refreshDock()
         val singleMode = isSingle(section)
-        val infoUnder = if (section == Section.EXPLORE || section == Section.SPORT) View.VISIBLE else View.GONE
+        val infoUnder = if (section == Section.EXPLORE || section == Section.SPORT || section == Section.TV) View.VISIBLE else View.GONE
         carouselTitle.visibility = infoUnder
         carouselMeta.visibility = infoUnder
         below.visibility = if (hasBelow(section)) View.VISIBLE else View.GONE
@@ -1427,6 +1433,7 @@ class MainActivity : ComponentActivity(), Host {
             is Match -> onMatchFocused(head)
             is AppInfo -> setCarouselInfo(head.label, "App")
             is RaceSession -> onRaceFocused(head)
+            is TvShow -> onTvFocused(head)
             else -> setCarouselInfo(if (state.ready[index]) "" else "Caricamento…", "")
         }
         if (first && items.isNotEmpty() && !userMoved) focusFirstCard()
@@ -1439,6 +1446,7 @@ class MainActivity : ComponentActivity(), Host {
             is MediaItem -> onMediaFocusedInfo(item)
             is Match -> onMatchFocused(item)
             is RaceSession -> onRaceFocused(item)
+            is TvShow -> onTvFocused(item)
             is AppInfo -> setCarouselInfo(item.label, "App")
             else -> setCarouselInfo("", "")
         }
@@ -1815,6 +1823,17 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun openSportPage(page: String) =
         startActivity(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
+
+    override fun onTvFocused(show: TvShow) {
+        val where = apps.get(listOf(show.channel.app)).firstOrNull()?.label ?: "app"
+        setCarouselInfo("${show.channel.name} · ${show.title}",
+            listOfNotNull("${TvGuide.time(show.start)} – ${TvGuide.time(show.stop)}", show.category, if (show.isOn) "In onda" else null, "OK apre $where").joinToString(" · "))
+    }
+
+    /** OK on a programme: the channel's app (RaiPlay, Mediaset Infinity, or NeroZone for the rest). */
+    override fun onTvClicked(show: TvShow) {
+        if (!apps.launch(show.channel.app)) toast("App per ${show.channel.name} non installata")
+    }
 
     override fun onRaceFocused(race: RaceSession) {
         val day = SimpleDateFormat("EEE d MMM", Locale.ITALY).apply { timeZone = java.util.TimeZone.getTimeZone("Europe/Rome") }

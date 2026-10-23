@@ -99,6 +99,25 @@ object Tmdb {
         return logo
     }
 
+    private val titleArt = HashMap<String, String?>()
+
+    /** A backdrop for a TV programme title (film or series), if TMDB recognises it. Cached. */
+    suspend fun backdropForTitle(title: String): String? {
+        val key = title.lowercase().trim()
+        if (titleArt.containsKey(key)) return titleArt[key]
+        val q = java.net.URLEncoder.encode(title, "UTF-8")
+        val r = runCatching {
+            val res = JSONObject(Net.get(url("/search/multi", "&query=$q&include_adult=false"))).optJSONArray("results") ?: JSONArray()
+            (0 until res.length()).map { res.getJSONObject(it) }
+                .filter { it.optString("media_type") in setOf("movie", "tv") }
+                // only a close name match, so news and talk shows don't get a random film's image
+                .firstOrNull { (it.str("title") ?: it.str("name"))?.equals(title, ignoreCase = true) == true }
+                ?.str("backdrop_path")?.let { "$IMG/w780$it" }
+        }.getOrNull()
+        titleArt[key] = r
+        return r
+    }
+
     fun poster(d: JSONObject) = d.str("poster_path")?.let { "$IMG/w342$it" }
 
     private val posterCache = HashMap<String, String?>()

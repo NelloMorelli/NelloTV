@@ -75,6 +75,12 @@
                         android:textColor="@color/text_dim" />
 
                     <TextView
+                        android:id="@+id/tabTv"
+                        style="@style/Tab"
+                        android:text="TV"
+                        android:textColor="@color/text_dim" />
+
+                    <TextView
                         android:id="@+id/tabSport"
                         style="@style/Tab"
                         android:text="Sport"

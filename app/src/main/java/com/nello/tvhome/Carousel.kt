@@ -38,6 +38,7 @@ class CarouselAdapter(
         private const val MATCH = 1
         private const val APP = 2
         private const val RACE = 3
+        private const val TV = 4
     }
 
     /** the card shown wide; stays wide while focus is in the dock or the tabs */
@@ -55,6 +56,7 @@ class CarouselAdapter(
         is Match -> MATCH
         is AppInfo -> APP
         is RaceSession -> RACE
+        is TvShow -> TV
         else -> MEDIA
     }
 
@@ -87,6 +89,7 @@ class CarouselAdapter(
             is Match -> h.bindMatch(item)
             is AppInfo -> h.bindApp(item)
             is RaceSession -> h.bindRace(item)
+            is TvShow -> h.bindTv(item)
         }
         h.itemView.setOnFocusChangeListener { v, has ->
             v.animate().scaleX(if (has) 1.04f else 1f).scaleY(if (has) 1.04f else 1f)
@@ -104,6 +107,7 @@ class CarouselAdapter(
                 is Match -> host.onMatchFocused(item)
                 is AppInfo -> host.onAppFocused(item)
                 is RaceSession -> host.onRaceFocused(item)
+                is TvShow -> host.onTvFocused(item)
             }
         }
     }
@@ -247,6 +251,56 @@ class CarouselAdapter(
             }
         }
 
+        // TV card: programme image (TMDB, if it's a film/series) or a dark gradient, the channel
+        // logo at the top left, title, time and progress at the bottom
+        private lateinit var tvArt: ImageView
+        private lateinit var tvLogo: ImageView
+        private lateinit var tvChannel: TextView
+        private lateinit var tvTitle: TextView
+        private lateinit var tvTime: TextView
+        private lateinit var tvTrack: FrameLayout
+        private lateinit var tvFill: View
+        private var tvJob: kotlinx.coroutines.Job? = null
+        private val tvView by lazy {
+            FrameLayout(ctx).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF2A2A30.toInt(), 0xFF101014.toInt()))
+                tvArt = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+                addView(tvArt, FrameLayout.LayoutParams(-1, -1))
+                addView(View(ctx).apply { setBackgroundResource(R.drawable.card_gradient) }, FrameLayout.LayoutParams(-1, px(130), Gravity.BOTTOM))
+                val head = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = GradientDrawable().apply { setColor(0xCC000000.toInt()); cornerRadius = 10 * dp }
+                    setPadding(px(10), px(6), px(12), px(6))
+                }
+                tvLogo = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+                head.addView(tvLogo, LinearLayout.LayoutParams(px(44), px(26)).apply { marginEnd = px(6) })
+                tvChannel = TextView(ctx).apply {
+                    textSize = 13f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    setTextColor(Color.WHITE)
+                }
+                head.addView(tvChannel)
+                addView(head, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(px(12), px(12), 0, 0) })
+                val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+                tvTitle = TextView(ctx).apply {
+                    textSize = 19f
+                    maxLines = 2
+                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    setTextColor(Color.WHITE)
+                    setShadowLayer(8f, 0f, 1f, 0xCC000000.toInt())
+                }
+                tvTime = TextView(ctx).apply { textSize = 13f; setTextColor(0xD9FFFFFF.toInt()) }
+                col.addView(tvTitle)
+                col.addView(tvTime)
+                tvTrack = FrameLayout(ctx).apply { setBackgroundResource(R.drawable.progress_track) }
+                tvFill = View(ctx).apply { setBackgroundResource(R.drawable.progress_fill) }
+                tvTrack.addView(tvFill, FrameLayout.LayoutParams(0, -1))
+                col.addView(tvTrack, LinearLayout.LayoutParams(-1, px(4)).apply { topMargin = px(8) })
+                addView(col, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(px(14), 0, px(14), px(14)) })
+            }
+        }
+
         init {
             when (type) {
                 MEDIA -> {
@@ -265,6 +319,7 @@ class CarouselAdapter(
                 }
                 MATCH -> { card.addView(matchView, FrameLayout.LayoutParams(-1, -1)); addArtLayers() }
                 RACE -> { card.addView(raceView, FrameLayout.LayoutParams(-1, -1)); addArtLayers() }
+                TV -> card.addView(tvView, FrameLayout.LayoutParams(-1, -1))
                 APP -> {
                     card.addView(appImage, FrameLayout.LayoutParams(-1, -1))
                     card.addView(appLabel, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = px(14) })
@@ -435,6 +490,27 @@ class CarouselAdapter(
             showArt("f1:${r.grandPrix}:${r.sessionEn}", rSession.text.toString(), r.state == "in") { SportArt.forRace(r) }
             card.contentDescription = "${r.grandPrix} ${r.session}"
             card.setOnClickListener { host.onRaceClicked(r) }
+        }
+
+        fun bindTv(t: TvShow) {
+            tvView
+            tvChannel.text = t.channel.name
+            tvLogo.dispose()
+            tvLogo.setImageDrawable(null)
+            tvLogo.visibility = if (t.channel.logo != null) View.VISIBLE else View.GONE
+            t.channel.logo?.let { tvLogo.load(it) }
+            tvTitle.text = t.title
+            tvTime.text = "${TvGuide.time(t.start)} – ${TvGuide.time(t.stop)}" + (t.category?.let { " · $it" } ?: "")
+            tvTrack.visibility = if (t.isOn) View.VISIBLE else View.GONE
+            if (t.isOn) tvTrack.post {
+                tvFill.layoutParams = tvFill.layoutParams.apply { width = (tvTrack.width * t.progress).toInt() }
+            }
+            tvJob?.cancel()
+            tvArt.dispose()
+            tvArt.setImageDrawable(null)
+            tvJob = scope.launch { Tmdb.backdropForTitle(t.title)?.let { tvArt.load(it) { crossfade(true) } } }
+            card.contentDescription = "${t.channel.name}: ${t.title}"
+            card.setOnClickListener { host.onTvClicked(t) }
         }
 
         fun bindApp(app: AppInfo) {

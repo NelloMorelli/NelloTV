@@ -41,7 +41,7 @@ class LauncherPrefs(context: Context) {
 
     companion object {
         val VPN_APPS = listOf("ch.protonvpn.android" to "ProtonVPN", "com.wireguard.android" to "WireGuard")
-        val TABS = listOf("EXPLORE" to "Esplora", "MOVIES" to "Film", "SERIES" to "Serie TV", "SPORT" to "Sport", "SEARCH" to "Cerca")
+        val TABS = listOf("EXPLORE" to "Esplora", "MOVIES" to "Film", "SERIES" to "Serie TV", "TV" to "TV", "SPORT" to "Sport", "SEARCH" to "Cerca")
         val WALLPAPERS = listOf(
             "original" to "Travis Scott (originale)",
             "daily" to "Film o serie del giorno",

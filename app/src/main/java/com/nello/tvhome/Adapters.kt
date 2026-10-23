@@ -27,6 +27,8 @@ interface Host {
     fun onRaceFocused(race: RaceSession) {}
     fun onMatchDetails(match: Match) {}
     fun onRaceClicked(race: RaceSession) {}
+    fun onTvFocused(show: TvShow) {}
+    fun onTvClicked(show: TvShow) {}
 }
 
 /** Keeps the focused child aligned to the start of the list, like the Fire TV / Apple TV home rows. */
