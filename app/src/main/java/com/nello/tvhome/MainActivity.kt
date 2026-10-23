@@ -511,7 +511,7 @@ class MainActivity : ComponentActivity(), Host {
     private fun setGlass(source: android.graphics.Bitmap?) {
         lifecycleScope.launch {
             GlassView.blurred = source?.let { withContext(Dispatchers.Default) { GlassView.makeBlur(it) } }
-            listOf(R.id.rightBar, R.id.dock, R.id.searchGlass).forEach { findViewById<View>(it).invalidate() }
+            listOf(R.id.rightBar, R.id.dock, R.id.searchGlass, R.id.voiceButton).forEach { findViewById<View>(it).invalidate() }
         }
     }
 
@@ -860,7 +860,15 @@ class MainActivity : ComponentActivity(), Host {
     // ---------------------------------------------------------------- search
 
     private fun setupSearch() {
-        findViewById<View>(R.id.voiceButton).setOnClickListener { startVoiceSearch() }
+        val voiceIcon = findViewById<StatusIcon>(R.id.voiceIcon).apply { kind = StatusIcon.Kind.MIC }
+        findViewById<GlassView>(R.id.voiceButton).apply {
+            frosted = true
+            solidFocus = true
+            zoomOnFocus = false
+            // focused: white circle, dark mic (like the top-right icons)
+            setOnFocusChangeListener { _, has -> voiceIcon.ink = if (has) 1f else 0f }
+            setOnClickListener { startVoiceSearch() }
+        }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}

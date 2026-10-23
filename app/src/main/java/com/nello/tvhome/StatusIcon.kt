@@ -11,7 +11,7 @@ import android.view.View
 /** Small top-bar glyphs drawn in code: Wi-Fi with signal bars, Ethernet, offline, VPN shield, gear. */
 class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
-    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR }
+    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, MIC }
 
     var kind = Kind.WIFI
         set(value) { field = value; invalidate() }
@@ -51,6 +51,7 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             Kind.ETHERNET -> drawEthernet(canvas, s, cx, cy)
             Kind.VPN -> drawShield(canvas, s, cx, cy)
             Kind.GEAR -> drawGear(canvas, s, cx, cy)
+            Kind.MIC -> drawMic(canvas, s, cx, cy)
         }
     }
 
@@ -126,5 +127,20 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
         path.fillType = Path.FillType.EVEN_ODD
         fill.color = on
         canvas.drawPath(path, fill)
+    }
+    /** Classic microphone: capsule, holder arc, stem and base. */
+    private fun drawMic(canvas: Canvas, s: Float, cx: Float, cy: Float) {
+        fill.color = on
+        stroke.color = on
+        stroke.strokeWidth = s * 0.09f
+        // capsule
+        rect.set(cx - s * 0.14f, cy - s * 0.46f, cx + s * 0.14f, cy + s * 0.08f)
+        canvas.drawRoundRect(rect, s * 0.14f, s * 0.14f, fill)
+        // holder
+        rect.set(cx - s * 0.28f, cy - s * 0.22f, cx + s * 0.28f, cy + s * 0.24f)
+        canvas.drawArc(rect, 0f, 180f, false, stroke)
+        // stem and base
+        canvas.drawLine(cx, cy + s * 0.24f, cx, cy + s * 0.40f, stroke)
+        canvas.drawLine(cx - s * 0.16f, cy + s * 0.42f, cx + s * 0.16f, cy + s * 0.42f, stroke)
     }
 }

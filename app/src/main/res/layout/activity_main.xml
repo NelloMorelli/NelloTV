@@ -220,20 +220,20 @@
                         android:textSize="17sp" />
                 </com.nello.tvhome.GlassView>
 
-                    <TextView
+                    <!-- the search bar's second half: same glass, round, mic icon -->
+                    <com.nello.tvhome.GlassView
                         android:id="@+id/voiceButton"
-                        android:layout_width="wrap_content"
+                        android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:layout_marginStart="12dp"
-                        android:background="@drawable/tab_bg"
+                        android:layout_marginStart="8dp"
                         android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center"
-                        android:paddingStart="18dp"
-                        android:paddingEnd="18dp"
-                        android:text="🎤  Voce"
-                        android:textColor="@color/tab_text"
-                        android:textSize="15sp" />
+                        android:contentDescription="Cerca con la voce"
+                        android:focusable="true">
+
+                        <com.nello.tvhome.StatusIcon
+                            android:id="@+id/voiceIcon"
+                            style="@style/BarGlyph" />
+                    </com.nello.tvhome.GlassView>
                 </LinearLayout>
 
             </LinearLayout>

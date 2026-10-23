@@ -107,7 +107,7 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
             glassPaint.shader.setLocalMatrix(shaderMatrix)
             canvas.drawRoundRect(rect, r, r, glassPaint)
         }
-        if (frosted) {
+        if (frosted && !(isFocused && solidFocus)) {
             val key = if (night) -height else height
             if (frostHeight != key) {
                 frostHeight = key
