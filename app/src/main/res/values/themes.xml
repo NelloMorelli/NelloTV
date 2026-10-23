@@ -14,6 +14,13 @@
         <item name="android:windowDisablePreview">false</item>
     </style>
 
+    <!-- full-page screens: drawn over the launcher, which stays visible (dimmed) behind -->
+    <style name="Theme.NelloTV.Page">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="Tab">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">match_parent</item>

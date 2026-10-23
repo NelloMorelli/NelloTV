@@ -88,31 +88,37 @@
 
         <activity
             android:name=".CustomizeActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
             android:name=".BluetoothActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
             android:name=".SportPagesActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
             android:name=".WallpaperPickerActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
             android:name=".ConnectionActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
             android:name=".SettingsActivity"
+            android:theme="@style/Theme.NelloTV.Page"
             android:exported="false"
             android:screenOrientation="landscape" />
     </application>

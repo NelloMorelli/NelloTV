@@ -383,9 +383,9 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
-    private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+    private fun openSettings() = openPage(Intent(this, SettingsActivity::class.java))
 
-    private fun openConnectionDetails() = startActivity(Intent(this, ConnectionActivity::class.java))
+    private fun openConnectionDetails() = openPage(Intent(this, ConnectionActivity::class.java))
 
     private fun onNetworkChanged(s: NetworkMonitor.State) {
         findViewById<StatusIcon>(R.id.netIcon).apply {
@@ -462,7 +462,7 @@ class MainActivity : ComponentActivity(), Host {
                 }
             }
             p.gap()
-            p.button("＋  Cerca nuove cuffie") { startActivity(Intent(this, BluetoothActivity::class.java)) }
+            p.button("＋  Cerca nuove cuffie") { openPage(Intent(this, BluetoothActivity::class.java)) }
             p.button("Impostazioni audio") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
             p.showUnder(findViewById(R.id.btButton))
         }
@@ -1925,14 +1925,14 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     override fun onMatchDetails(match: Match) {
-        startActivity(Intent(this, SportPagesActivity::class.java)
+        openPage(Intent(this, SportPagesActivity::class.java)
             .putExtra(SportPagesActivity.EXTRA_PAGE, SportPagesActivity.MATCH)
             .putExtra(SportPagesActivity.EXTRA_EVENT, match.id)
             .putExtra(SportPagesActivity.EXTRA_LEAGUE, match.league.espn))
     }
 
     private fun openSportPage(page: String) =
-        startActivity(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
+        openPage(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
 
     override fun onTvFocused(show: TvShow) {
         if (current == Section.EXPLORE) {

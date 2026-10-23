@@ -173,7 +173,6 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
                 if (!keepOpen) dismiss()
                 action()
             }
-            setOnFocusChangeListener { v, has -> if (has) body.pillTo(v) }
             setOnKeyListener { v, code, e ->
                 // ↑ on the first row: back into the button it came from, no Back needed
                 if (code == android.view.KeyEvent.KEYCODE_DPAD_UP && v === firstButton && anchor != null) {
@@ -656,6 +655,12 @@ class LiquidList(context: Context) : LinearLayout(context) {
     private val clip = android.graphics.Path()
 
     init { setWillNotDraw(false) }
+
+    // any row that takes the focus gets the pill (pages add their own rows too)
+    override fun requestChildFocus(child: View?, focused: View?) {
+        super.requestChildFocus(child, focused)
+        if (child != null && child === focused) pillTo(child)
+    }
 
     fun pillTo(v: View) {
         end.set(v.left.toFloat(), v.top.toFloat(), v.right.toFloat(), v.bottom.toFloat())

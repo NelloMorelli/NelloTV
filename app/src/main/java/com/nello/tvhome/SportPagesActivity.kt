@@ -67,7 +67,7 @@ class SportPagesActivity : GlassPage() {
             setPadding(dp(16), dp(8), dp(16), dp(8))
             if (!header) {
                 isFocusable = true
-                setBackgroundResource(R.drawable.tab_bg)
+                // the page's liquid pill marks the focused row
             }
         }
         cols.forEachIndexed { i, c ->
@@ -80,7 +80,7 @@ class SportPagesActivity : GlassPage() {
                 gravity = if (i <= 1) Gravity.START else Gravity.END
                 if (i == 0) setPadding(0, 0, dp(12), 0)
                 if (header) setTextColor(getColor(R.color.text_faint))
-                else setTextColor(getColorStateList(R.color.tab_text))
+                else setTextColor(0xF2FFFFFF.toInt())
                 if (highlight) typeface = android.graphics.Typeface.DEFAULT_BOLD
             }, if (widths[i] == 0) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(dp(widths[i]), -2))
         }

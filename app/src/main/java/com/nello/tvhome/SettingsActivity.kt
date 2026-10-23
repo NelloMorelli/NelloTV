@@ -91,7 +91,7 @@ class SettingsActivity : GlassPage() {
         title("Impostazioni")
 
         header("Nello TV")
-        row("Personalizza", "Colori, vetro, schede, cataloghi, nomi…") { startActivity(Intent(this, CustomizeActivity::class.java)) }
+        row("Personalizza", "Colori, vetro, schede, cataloghi, nomi…") { openPage(Intent(this, CustomizeActivity::class.java)) }
         row("Sfondo", LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) {
             // same menu as the ⚙ pop-up: built-ins, your image (if any), pick a new one
             val hasCustom = java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).exists()
@@ -99,7 +99,7 @@ class SettingsActivity : GlassPage() {
                 (if (hasCustom) listOf("custom" to "La tua immagine") else emptyList()) +
                 ("pick" to "Scegli immagine dal dispositivo…")
             choose(it, "Sfondo", options, prefs.wallpaper) { v ->
-                if (v == "pick") startActivity(Intent(this, WallpaperPickerActivity::class.java)) else prefs.wallpaper = v
+                if (v == "pick") openPage(Intent(this, WallpaperPickerActivity::class.java)) else prefs.wallpaper = v
             }
         }
         row("Aggiornamenti", "Versione ${Updater.name()}") {
