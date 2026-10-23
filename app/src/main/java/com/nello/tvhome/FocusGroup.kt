@@ -102,7 +102,12 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     }
 
     /** Call after changing which child is "selected" (the current tab). */
-    fun refresh() = retarget(animate = true)
+    fun refresh() {
+        retarget(animate = true)
+        // labels follow the selection even when the highlight didn't move
+        updateInk()
+        invalidate()
+    }
 
     private fun buttons() = (0 until childCount).map { getChildAt(it) }.filter { it.visibility == VISIBLE && it.isFocusable }
 

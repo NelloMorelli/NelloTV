@@ -355,6 +355,13 @@ class CarouselAdapter(
             showArt("m:${m.id}", chipText, m.state == "in") { SportArt.forMatch(m) }
             card.contentDescription = "${m.home} contro ${m.away}"
             card.setOnClickListener { host.onMatchClicked(m) }
+            // hold OK or ☰: lineups, goals and cards
+            card.setOnLongClickListener { host.onMatchDetails(m); true }
+            card.setOnKeyListener { _, code, ev ->
+                if (code != KeyEvent.KEYCODE_MENU) return@setOnKeyListener false
+                if (ev.action == KeyEvent.ACTION_UP) host.onMatchDetails(m)
+                true
+            }
         }
 
         private fun buildMatchView(): View {

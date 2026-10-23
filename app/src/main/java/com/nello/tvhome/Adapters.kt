@@ -25,6 +25,7 @@ interface Host {
     fun onMatchFocused(match: Match)
     fun onMatchClicked(match: Match)
     fun onRaceFocused(race: RaceSession) {}
+    fun onMatchDetails(match: Match) {}
     fun onRaceClicked(race: RaceSession) {}
 }
 

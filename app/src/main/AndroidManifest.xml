@@ -59,6 +59,11 @@
         </service>
 
         <activity
+            android:name=".SportPagesActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
             android:name=".WallpaperPickerActivity"
             android:exported="false"
             android:screenOrientation="landscape" />

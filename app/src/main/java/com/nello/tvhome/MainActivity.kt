@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity(), Host {
 
     companion object {
         const val ACTION_LINK_NUVIO = "com.nello.tvhome.LINK_NUVIO"
+        const val ACTION_OPEN_SPORT = "com.nello.tvhome.OPEN_SPORT"
     }
 
     /** Order matches the tabs in the top bar. */
@@ -497,9 +498,9 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
-        // Esplora: up from the carousel stops on "⟳ Altri per te" before the tabs
+        // up from the carousel stops on the label at the top right (⟳ Altri per te / catalog picker) before the tabs
         if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-            current == Section.EXPLORE && carousel.hasFocus() && catalogLabel.isShown
+            isSingle(current) && carousel.hasFocus() && catalogLabel.isShown
         ) {
             catalogLabel.requestFocus()
             return true
@@ -524,6 +525,10 @@ class MainActivity : ComponentActivity(), Host {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: back to the top of Esplora
+        if (intent.action == ACTION_OPEN_SPORT) {
+            show(Section.SPORT, focusContent = true)
+            return
+        }
         if (intent.action == ACTION_LINK_NUVIO) {
             if (current != Section.EXPLORE) show(Section.EXPLORE)
             linkNuvio()
@@ -1173,6 +1178,13 @@ class MainActivity : ComponentActivity(), Host {
                 focusFirstCard()
             }
         }
+        if (current == Section.SPORT) {
+            p.gap()
+            p.button("Classifica Serie A") { openSportPage(SportPagesActivity.SERIE_A) }
+            p.button("Classifica F1 · Piloti") { openSportPage(SportPagesActivity.F1_DRIVERS) }
+            p.button("Classifica F1 · Costruttori") { openSportPage(SportPagesActivity.F1_TEAMS) }
+            p.button("Calendario Napoli") { openSportPage(SportPagesActivity.NAPOLI) }
+        }
         p.showUnder(catalogLabel)
     }
 
@@ -1506,6 +1518,16 @@ class MainActivity : ComponentActivity(), Host {
             }
         }
     }
+
+    override fun onMatchDetails(match: Match) {
+        startActivity(Intent(this, SportPagesActivity::class.java)
+            .putExtra(SportPagesActivity.EXTRA_PAGE, SportPagesActivity.MATCH)
+            .putExtra(SportPagesActivity.EXTRA_EVENT, match.id)
+            .putExtra(SportPagesActivity.EXTRA_LEAGUE, match.league.espn))
+    }
+
+    private fun openSportPage(page: String) =
+        startActivity(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
 
     override fun onRaceFocused(race: RaceSession) {
         val day = SimpleDateFormat("EEE d MMM", Locale.ITALY).apply { timeZone = java.util.TimeZone.getTimeZone("Europe/Rome") }
