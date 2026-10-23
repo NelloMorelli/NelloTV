@@ -210,6 +210,21 @@ class MainActivity : ComponentActivity(), Host {
         checkForUpdate()
     }
 
+    /**
+     * Fire OS turns accessibility services off when an app update changes its permissions:
+     * switch ours (standby return, notifications) back on. Needs WRITE_SECURE_SETTINGS, granted via adb.
+     */
+    private fun ensureBackgroundService() {
+        val me = "$packageName/${WakeService::class.java.name}"
+        runCatching {
+            val cur = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+            if (cur.split(':').any { it == me || it == "$packageName/.WakeService" }) return
+            val next = if (cur.isBlank()) me else "$cur:$me"
+            android.provider.Settings.Secure.putString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, next)
+            android.provider.Settings.Secure.putInt(contentResolver, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+        }
+    }
+
     /** New version on GitHub: offer it once per version (also on every launcher start). */
     private fun checkForUpdate(manual: Boolean = false) {
         lifecycleScope.launch {
@@ -578,6 +593,7 @@ class MainActivity : ComponentActivity(), Host {
     override fun onResume() {
         super.onResume()
         inForeground = true
+        ensureBackgroundService()
         applyPrefs()
         network.refresh()
         refreshExploreLiveRows()
