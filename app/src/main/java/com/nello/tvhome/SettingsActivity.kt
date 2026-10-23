@@ -102,7 +102,7 @@ class SettingsActivity : GlassPage() {
                 if (v == "pick") startActivity(Intent(this, WallpaperPickerActivity::class.java)) else prefs.wallpaper = v
             }
         }
-        row("Aggiornamenti", "Versione ${BuildConfig.VERSION_CODE}") {
+        row("Aggiornamenti", "Versione ${Updater.name()}") {
             // the check runs on the home screen, where its pop-up lives
             startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_CHECK_UPDATE))
             finish()

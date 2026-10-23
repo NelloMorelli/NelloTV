@@ -16,7 +16,7 @@ val gitCount = runCatching {
 }.getOrDefault(1)
 
 // the name you see ("0.39"): major.(commits since start) — see version.properties
-val versionProps = java.util.Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
+val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
 val versionMajor = versionProps.getProperty("major", "0").toInt()
 val versionStart = versionProps.getProperty("start", "0").toInt()
 

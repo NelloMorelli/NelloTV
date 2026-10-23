@@ -16,6 +16,9 @@ import java.net.URL
  */
 object Updater {
 
+    /** "0.39": the name of a version number (this build's, or a release's on GitHub). */
+    fun name(code: Int = BuildConfig.VERSION_CODE) = "${BuildConfig.VERSION_MAJOR}.${code - BuildConfig.VERSION_START}"
+
     class Release(val version: Int, val notes: String, val apiAssetUrl: String)
 
     val configured get() = BuildConfig.UPDATE_REPO.isNotBlank() && BuildConfig.UPDATE_TOKEN.isNotBlank()

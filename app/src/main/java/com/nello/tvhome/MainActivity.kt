@@ -248,14 +248,14 @@ class MainActivity : ComponentActivity(), Host {
             delay(if (manual) 0 else 8_000)
             val r = runCatching { Updater.check() }.getOrNull()
             if (r == null) {
-                if (manual) toast(if (Updater.configured) "Nello TV è aggiornato (versione ${BuildConfig.VERSION_CODE})" else "Aggiornamenti non configurati")
+                if (manual) toast(if (Updater.configured) "Nello TV è aggiornato (versione ${Updater.name()})" else "Aggiornamenti non configurati")
                 return@launch
             }
             val seen = getSharedPreferences("update", MODE_PRIVATE)
             if (!manual && seen.getInt("offered", 0) == r.version) return@launch
             seen.edit().putInt("offered", r.version).apply()
             val p = GlassPopup(this@MainActivity, widthDp = 420)
-                .title("Aggiornamento disponibile", "Versione ${r.version} · ora hai la ${BuildConfig.VERSION_CODE}")
+                .title("Aggiornamento disponibile", "Versione ${Updater.name(r.version)} · ora hai la ${Updater.name()}")
             if (r.notes.isNotBlank()) p.text(r.notes.take(400))
             p.button("Installa ora") {
                 toast("Scarico l'aggiornamento…")
@@ -508,12 +508,12 @@ class MainActivity : ComponentActivity(), Host {
      */
     private fun showSettingsPopup() {
         val p = popup()
-        val status = p.hero("Nello TV", "Versione ${BuildConfig.VERSION_CODE} · controllo aggiornamenti…")
+        val status = p.hero("Nello TV", "Versione ${Updater.name()} · controllo aggiornamenti…")
         p.button("Impostazioni del launcher") { openSettings() }
         p.button("Impostazioni della Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
         val job = lifecycleScope.launch {
             val r = if (Updater.configured) runCatching { Updater.check() }.getOrNull() else null
-            status.text = "Versione ${BuildConfig.VERSION_CODE} · " + (r?.let { "disponibile la ${it.version}" } ?: "aggiornato")
+            status.text = "Versione ${Updater.name()} · " + (r?.let { "disponibile la ${Updater.name(it.version)}" } ?: "aggiornato")
         }
         p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.settingsButton))
