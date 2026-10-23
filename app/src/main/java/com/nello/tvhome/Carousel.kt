@@ -44,6 +44,11 @@ class CarouselAdapter(
     var active = 0
         private set
 
+    /** Start with [i] as the wide card (restoring where you were). */
+    fun startAt(i: Int) {
+        if (i in items.indices) active = i
+    }
+
     override fun getItemCount() = items.size
 
     override fun getItemViewType(position: Int) = when (items[position]) {

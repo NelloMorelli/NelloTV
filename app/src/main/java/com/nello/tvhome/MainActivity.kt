@@ -198,7 +198,12 @@ class MainActivity : ComponentActivity(), Host {
         tickLiveScores()
 
         onBackPressedDispatcher.addCallback(this) { goTop() }
-        show(startSection(), focusContent = true)
+        // back where you were if the launcher was closed while you were in an app
+        val resume = getSharedPreferences("where", MODE_PRIVATE)
+        val recent = System.currentTimeMillis() - resume.getLong("at", 0) < 6 * 3600_000L
+        val section = if (recent) runCatching { Section.valueOf(resume.getString("section", "")!!) }.getOrNull() else null
+        if (section != null && isSingle(section)) pendingCard[section] = resume.getInt("card", 0)
+        show(section ?: startSection(), focusContent = true)
         preloadSections()
     }
 
@@ -493,6 +498,20 @@ class MainActivity : ComponentActivity(), Host {
         return super.dispatchKeyEvent(event)
     }
 
+    /** carousel card to reopen per tab (Torna dove eri) */
+    private val pendingCard = HashMap<Section, Int>()
+    private var inForeground = false
+
+    override fun onPause() {
+        super.onPause()
+        inForeground = false
+        getSharedPreferences("where", MODE_PRIVATE).edit()
+            .putString("section", current.name)
+            .putInt("card", carouselAdapter?.active ?: 0)
+            .putLong("at", System.currentTimeMillis())
+            .apply()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: back to the top of Esplora
@@ -502,12 +521,15 @@ class MainActivity : ComponentActivity(), Host {
             return
         }
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            // coming back from an app: stay where you were. Home pressed again here: top of Esplora
+            if (!inForeground) return
             if (current != Section.EXPLORE) show(Section.EXPLORE, focusContent = true) else goTop()
         }
     }
 
     override fun onResume() {
         super.onResume()
+        inForeground = true
         applyPrefs()
         network.refresh()
         refreshExploreLiveRows()
@@ -800,6 +822,7 @@ class MainActivity : ComponentActivity(), Host {
     // ---------------------------------------------------------------- search
 
     private fun setupSearch() {
+        findViewById<View>(R.id.voiceButton).setOnClickListener { startVoiceSearch() }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -822,6 +845,17 @@ class MainActivity : ComponentActivity(), Host {
                 true
             } else false
         }
+    }
+
+    /**
+     * 🎤 Voce: Fire OS gives apps no speech engine, but its keyboard does dictation:
+     * open the keyboard on the search field and hold the remote's Alexa button to speak.
+     */
+    private fun startVoiceSearch() {
+        searchInput.requestFocus()
+        searchInput.setText("")
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(searchInput, InputMethodManager.SHOW_FORCED)
+        Toast.makeText(this, "Tieni premuto il tasto Alexa (🎤) sul telecomando e di' cosa cerchi", Toast.LENGTH_LONG).show()
     }
 
     private suspend fun runSearch(query: String) {
@@ -1074,9 +1108,11 @@ class MainActivity : ComponentActivity(), Host {
         shownCatalog = row
         shownItems = items
         carouselAdapter = CarouselAdapter(items, this, lifecycleScope)
+        val restore = pendingCard.remove(state.section)?.takeIf { it in items.indices }
+        if (restore != null) carouselAdapter!!.startAt(restore)
         carousel.adapter = carouselAdapter
-        carousel.scrollToPosition(0)
-        when (val head = items.firstOrNull()) {
+        carousel.scrollToPosition(restore ?: 0)
+        when (val head = items.getOrNull(carouselAdapter?.active ?: 0)) {
             is MediaItem -> onMediaFocusedInfo(head)
             is Match -> onMatchFocused(head)
             is AppInfo -> setCarouselInfo(head.label, "App")
@@ -1123,11 +1159,21 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     /** Favourite apps in the dock at the bottom of the single-screen tabs. */
-    private fun refreshDock() {
+    private fun refreshDock(keepFocusOn: String? = null) {
         val favs = apps.get(apps.dock(sportDock))
         if (favs.map { it.pkg } == dockApps) return
         dockApps = favs.map { it.pkg }
+        // rebuilding the dock drops the focus: keep it on the same app (or same slot) so it doesn't
+        // fall onto the first tab and switch section
+        val focusedPkg = keepFocusOn ?: if (dockList.hasFocus()) dockList.focusedChild?.contentDescription?.toString() else null
+        val focusedPos = dockList.focusedChild?.let { dockList.getChildAdapterPosition(it) } ?: 0
+        if (focusedPkg != null) dockList.requestFocus()
         dockList.adapter = CardsAdapter(Row("dock", "", RowKind.DOCK, apps = favs), this)
+        if (focusedPkg != null) {
+            val target = favs.indexOfFirst { it.label == focusedPkg }.takeIf { it >= 0 } ?: focusedPos.coerceIn(0, (favs.size - 1).coerceAtLeast(0))
+            // after the pop-up has handed focus back to the window
+            dockList.postDelayed({ dockList.layoutManager?.findViewByPosition(target)?.requestFocus() }, 120)
+        }
         // apps in the dock don't repeat in the grid below
         states[current]?.let { if (hasBelow(current)) bindBelow(it) }
     }
@@ -1475,19 +1521,19 @@ class MainActivity : ComponentActivity(), Host {
         p.button("Apri") { onAppClicked(app) }
         if (inDock) {
             val pos = apps.dock(sportDock).indexOf(app.pkg)
-            if (pos > 0) p.button("← Sposta a sinistra") { apps.moveInDock(app.pkg, -1, sportDock); refreshDock() }
-            if (pos < apps.dock(sportDock).size - 1) p.button("Sposta a destra →") { apps.moveInDock(app.pkg, +1, sportDock); refreshDock() }
+            if (pos > 0) p.button("← Sposta a sinistra") { apps.moveInDock(app.pkg, -1, sportDock); refreshDock(app.label) }
+            if (pos < apps.dock(sportDock).size - 1) p.button("Sposta a destra →") { apps.moveInDock(app.pkg, +1, sportDock); refreshDock(app.label) }
             p.button("Rimuovi dal dock") {
                 apps.removeFromDock(app.pkg, sportDock)
                 toast("${app.label} rimossa dal dock")
-                refreshDock()
+                refreshDock(app.label)
             }
         } else if (app.pkg != Apps.SETTINGS) {
             p.button(if (apps.dockFull(sportDock)) "Metti nel dock al posto di…" else "Aggiungi al dock") {
                 if (!apps.dockFull(sportDock)) {
                     apps.addToDock(app.pkg, sport = sportDock)
                     toast("${app.label} aggiunta al dock")
-                    refreshDock()
+                    refreshDock(app.label)
                 } else replaceInDock(app)
             }
         }
@@ -1506,7 +1552,7 @@ class MainActivity : ComponentActivity(), Host {
             p.button(old.label) {
                 apps.addToDock(app.pkg, replacing = old.pkg, sport = sportDock)
                 toast("${app.label} nel dock al posto di ${old.label}")
-                refreshDock()
+                refreshDock(app.label)
             }
         }
         p.showSpotlight(page, appHero(app), 272, 153)

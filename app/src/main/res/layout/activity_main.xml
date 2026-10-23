@@ -203,6 +203,12 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
                 <com.nello.tvhome.GlassView
                     android:id="@+id/searchGlass"
                     android:layout_width="560dp"
@@ -223,6 +229,22 @@
                         android:textColorHint="@color/text_faint"
                         android:textSize="17sp" />
                 </com.nello.tvhome.GlassView>
+
+                    <TextView
+                        android:id="@+id/voiceButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/tab_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="🎤  Voce"
+                        android:textColor="@color/tab_text"
+                        android:textSize="15sp" />
+                </LinearLayout>
 
             </LinearLayout>
 
