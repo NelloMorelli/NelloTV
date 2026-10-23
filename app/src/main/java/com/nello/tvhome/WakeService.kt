@@ -25,6 +25,15 @@ class WakeService : AccessibilityService() {
     override fun onServiceConnected() {
         registerReceiver(receiver, IntentFilter(Intent.ACTION_SCREEN_ON))
         notifier = Notifier(this).also { it.start() }
+        // banner when headphones connect (e.g. switched on and reconnected by themselves)
+        registerReceiver(object : BroadcastReceiver() {
+            @android.annotation.SuppressLint("MissingPermission")
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getIntExtra(android.bluetooth.BluetoothProfile.EXTRA_STATE, -1) != android.bluetooth.BluetoothProfile.STATE_CONNECTED) return
+                val d = i.getParcelableExtra<android.bluetooth.BluetoothDevice>(android.bluetooth.BluetoothDevice.EXTRA_DEVICE) ?: return
+                notifier?.show("${BluetoothAudio.pretty(d)} collegate", "L'audio della TV ora esce dalle cuffie", null) {}
+            }
+        }, IntentFilter(android.bluetooth.BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED))
         instance = this
     }
 

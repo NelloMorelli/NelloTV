@@ -131,6 +131,16 @@
                     </FrameLayout>
 
                     <FrameLayout
+                        android:id="@+id/btButton"
+                        style="@style/BarIcon"
+                        android:contentDescription="Cuffie Bluetooth">
+
+                        <com.nello.tvhome.StatusIcon
+                            android:id="@+id/btIcon"
+                            style="@style/BarGlyph" />
+                    </FrameLayout>
+
+                    <FrameLayout
                         android:id="@+id/settingsButton"
                         style="@style/BarIcon"
                         android:contentDescription="Impostazioni">

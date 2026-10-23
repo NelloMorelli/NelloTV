@@ -11,7 +11,7 @@ import android.view.View
 /** Small top-bar glyphs drawn in code: Wi-Fi with signal bars, Ethernet, offline, VPN shield, gear. */
 class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
-    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, MIC }
+    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, MIC, HEADPHONES }
 
     var kind = Kind.WIFI
         set(value) { field = value; invalidate() }
@@ -52,6 +52,7 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             Kind.VPN -> drawShield(canvas, s, cx, cy)
             Kind.GEAR -> drawGear(canvas, s, cx, cy)
             Kind.MIC -> drawMic(canvas, s, cx, cy)
+            Kind.HEADPHONES -> drawHeadphones(canvas, s, cx, cy)
         }
     }
 
@@ -142,5 +143,21 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
         // stem and base
         canvas.drawLine(cx, cy + s * 0.24f, cx, cy + s * 0.40f, stroke)
         canvas.drawLine(cx - s * 0.16f, cy + s * 0.42f, cx + s * 0.16f, cy + s * 0.42f, stroke)
+    }
+    /** Over-ear headphones; filled cups when connected (level 1), outlined when not. */
+    private fun drawHeadphones(canvas: Canvas, s: Float, cx: Float, cy: Float) {
+        val connected = level > 0
+        stroke.color = on
+        stroke.strokeWidth = s * 0.09f
+        // headband
+        rect.set(cx - s * 0.36f, cy - s * 0.40f, cx + s * 0.36f, cy + s * 0.32f)
+        canvas.drawArc(rect, 180f, 180f, false, stroke)
+        // ear cups
+        fill.color = on
+        for (x in listOf(cx - s * 0.36f, cx + s * 0.36f)) {
+            rect.set(x - s * 0.11f, cy - s * 0.02f, x + s * 0.11f, cy + s * 0.40f)
+            if (connected) canvas.drawRoundRect(rect, s * 0.08f, s * 0.08f, fill)
+            else canvas.drawRoundRect(rect, s * 0.08f, s * 0.08f, stroke)
+        }
     }
 }
