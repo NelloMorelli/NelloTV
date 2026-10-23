@@ -37,6 +37,9 @@ class CarouselAdapter(
         const val WIDE_W = 373
         /** the other cards, next to the first (selected) one */
         const val SMALL = 0.78f
+        /** films/series not selected: small landscape cards */
+        const val LAND_W = 224
+        const val LAND_H = 126
         private const val MEDIA = 0
         private const val MATCH = 1
         private const val APP = 2
@@ -46,6 +49,8 @@ class CarouselAdapter(
 
     /** the card shown wide; stays wide while focus is in the dock or the tabs */
     var active = 0
+    /** the carousel has the focus: only then the selected film/series turns into a poster */
+    private var focused = false
         private set
 
     /** Start with [i] as the wide card (restoring where you were). */
@@ -91,7 +96,7 @@ class CarouselAdapter(
         h.itemView.setOnKeyListener(null)
         h.itemView.setOnLongClickListener(null)
         when (item) {
-            is MediaItem -> h.bindMedia(item, position == active)
+            is MediaItem -> h.bindMedia(item, position == active && focused)
             is Match -> h.bindMatch(item)
             is AppInfo -> h.bindApp(item)
             is RaceSession -> h.bindRace(item)
@@ -101,14 +106,24 @@ class CarouselAdapter(
         h.itemView.setOnFocusChangeListener { v, has ->
             v.animate().scaleX(if (has) 1.04f else 1f).scaleY(if (has) 1.04f else 1f)
                 .setDuration(440).setInterpolator(DecelerateInterpolator(1.4f)).start()
-            if (!has) return@setOnFocusChangeListener
+            if (!has) {
+                // focus left the carousel (top menu, dock): the poster goes back to landscape
+                v.post {
+                    if ((v.parent as? View)?.hasFocus() != true) {
+                        focused = false
+                        if (h.bindingAdapterPosition == active && item is MediaItem) h.setExpanded(false, animate = true)
+                    }
+                }
+                return@setOnFocusChangeListener
+            }
+            focused = true
             val pos = h.bindingAdapterPosition
             if (pos != RecyclerView.NO_POSITION && pos != active) {
                 val old = active
                 active = pos
                 notifyItemChanged(old, "collapse")
-                h.setExpanded(true, animate = true)
             }
+            h.setExpanded(true, animate = true)
             when (item) {
                 is MediaItem -> host.onMediaFocused(item)
                 is Match -> host.onMatchFocused(item)
@@ -385,10 +400,11 @@ class CarouselAdapter(
 
         /** Width and height between "other card" (0) and "first, selected card" (1), centred. */
         private fun size(f: Float) {
-            val bigW = px(WIDE_W).toFloat()
-            val smallW = px(if (type == MEDIA) POSTER_W else WIDE_W) * SMALL
+            // films/series: selected = vertical poster, full height; others = small landscape
+            val bigW = px(if (type == MEDIA) POSTER_W else WIDE_W).toFloat()
+            val smallW = if (type == MEDIA) px(LAND_W).toFloat() else px(WIDE_W) * SMALL
             val bigH = px(HEIGHT).toFloat()
-            val smallH = bigH * SMALL
+            val smallH = if (type == MEDIA) px(LAND_H).toFloat() else bigH * SMALL
             val h = smallH + (bigH - smallH) * f
             card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply {
                 width = (smallW + (bigW - smallW) * f).toInt()
@@ -404,8 +420,9 @@ class CarouselAdapter(
         fun setExpanded(expanded: Boolean, animate: Boolean) {
             val target = if (expanded) 1f else 0f
             widthAnim?.cancel()
-            val posterAlpha = if (expanded) 0f else 1f
-            val wideAlpha = if (expanded) 1f else 0f
+            // selected = poster (with its Top 10 number), the rest = landscape with the title logo
+            val posterAlpha = if (expanded) 1f else 0f
+            val wideAlpha = if (expanded) 0f else 1f
             if (!animate || expandedNow < 0f) {
                 expandedNow = target
                 size(target)
@@ -427,7 +444,6 @@ class CarouselAdapter(
             }
             if (type != MEDIA) return
             poster.animate().alpha(posterAlpha).setDuration(560).start()
-            // the wide Top 10 artwork already shows its number
             rank.animate().alpha(posterAlpha).setDuration(560).start()
             logo.animate().alpha(wideAlpha).setDuration(560).start()
         }
