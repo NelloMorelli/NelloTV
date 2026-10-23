@@ -679,14 +679,85 @@ class MainActivity : ComponentActivity(), Host {
         else -> 30 * 60_000L
     }
 
-    private fun show(section: Section, focusContent: Boolean = false) {
-        val changed = current != section || rowsView.tag == null
-        current = section
+    private var tabAnimGen = 0
+
+    /** What slides when the tab changes: the content, not the header; the dock only if it changes. */
+    private fun tabContent(section: Section, dockChanges: Boolean): List<View> =
+        if (isSingle(section)) listOfNotNull(catalogLabel, carousel, carouselTitle, carouselMeta, below, findViewById<View>(R.id.dock).takeIf { dockChanges })
+        else listOf(hero, rowsView)
+
+    private fun styleTabs(section: Section) {
         tabs.forEachIndexed { i, t ->
             t.isSelected = i == section.ordinal
             t.typeface = android.graphics.Typeface.create("sans-serif-medium", if (t.isSelected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
         findViewById<FocusGroup>(R.id.tabGroup).refresh()
+    }
+
+    /**
+     * Change tab with a directional slide: the old content slides and fades out towards where
+     * you're going, the new one comes in from the other side. Header stays put; the dock only
+     * crossfades when entering/leaving Sport (its own dock).
+     */
+    private fun show(section: Section, focusContent: Boolean = false) {
+        val from = current
+        if (from == section || rowsView.tag == null) {
+            showNow(section, focusContent)
+            return
+        }
+        val gen = ++tabAnimGen
+        styleTabs(section)
+        val dir = if (section.ordinal > from.ordinal) 1 else -1
+        val shift = 56 * resources.displayMetrics.density
+        val dockChanges = (from == Section.SPORT) != (section == Section.SPORT)
+        val out = tabContent(from, dockChanges).filter { it.visibility == View.VISIBLE }
+        if (out.isEmpty()) {
+            showNow(section, focusContent)
+            return
+        }
+        // durations are doubled: the Fire TV runs animations at 0.5x
+        out.forEachIndexed { i, v ->
+            v.animate().cancel()
+            v.animate().alpha(0f).translationX(-dir * shift).setDuration(240)
+                .setInterpolator(android.view.animation.AccelerateInterpolator(1.4f))
+                .withEndAction(if (i != 0) null else Runnable {
+                    if (gen != tabAnimGen) return@Runnable
+                    out.forEach { it.translationX = 0f }
+                    showNow(section, focusContent)
+                    tabContent(section, dockChanges).forEach { inV ->
+                        inV.animate().cancel()
+                        inV.alpha = 0f
+                        inV.translationX = dir * shift
+                        inV.animate().alpha(1f).translationX(0f).setDuration(460)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f)).start()
+                    }
+                })
+                .start()
+        }
+    }
+
+    /** Download the first cards' images into the cache (poster and wide image, at card size). */
+    private fun prefetch(items: List<Any>) {
+        val loader = coil.Coil.imageLoader(this)
+        val dp = resources.displayMetrics.density
+        items.take(8).forEach { item ->
+            val urls = when (item) {
+                is MediaItem -> listOfNotNull(item.poster to CarouselAdapter.POSTER_W, item.image to CarouselAdapter.WIDE_W)
+                else -> emptyList()
+            }
+            urls.forEach { (url, w) ->
+                if (url != null) loader.enqueue(
+                    coil.request.ImageRequest.Builder(this).data(url)
+                        .size((w * dp).toInt(), (CarouselAdapter.HEIGHT * dp).toInt()).build()
+                )
+            }
+        }
+    }
+
+    private fun showNow(section: Section, focusContent: Boolean = false) {
+        val changed = current != section || rowsView.tag == null
+        current = section
+        styleTabs(section)
         updateSearchTab()
         refreshDock()
         val singleMode = isSingle(section)
@@ -698,16 +769,11 @@ class MainActivity : ComponentActivity(), Host {
         if (changed) { shownContinue = null; shownBento = null }
         if (changed) page.scrollTo(0, 0)
         single.visibility = if (singleMode) View.VISIBLE else View.GONE
+        if (tabAnimGen == 0 || !changed) listOf(single, rowsView, hero).forEach { it.alpha = 1f }
         hero.visibility = if (singleMode) View.GONE else View.VISIBLE
         rowsView.visibility = if (singleMode) View.GONE else View.VISIBLE
         // Sport keeps its big clock; elsewhere the clock sits in the header
-        // soft crossfade of the content when the tab changes
-        if (changed) {
-            rowsView.tag = section
-            val content = if (singleMode) single else rowsView
-            content.alpha = 0f
-            content.animate().alpha(1f).setDuration(520).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-        }
+        if (changed) rowsView.tag = section
         searchBox.visibility = if (section == Section.SEARCH) View.VISIBLE else View.GONE
         if (singleMode) {
             val stale = states[section]?.let { System.currentTimeMillis() - it.loadedAt > maxAge(section) } ?: true
@@ -750,6 +816,8 @@ class MainActivity : ComponentActivity(), Host {
                 if (media != null) state.rows[i].media = runCatching { media() }.getOrElse { emptyList() }
                 if (matches != null) state.rows[i].matches = runCatching { matches() }.getOrElse { emptyList() }
                 if (mixed != null) state.rows[i].items = runCatching { mixed() }.getOrElse { emptyList() }
+                // the carousel's first catalog: fetch its images now, so the tab slides in complete
+                if (i == 0 && isSingle(state.section)) prefetch(itemsOf(state.rows[i]))
                 state.ready[i] = true
                 if (states[state.section] === state && current == state.section) publish(state)
             }
