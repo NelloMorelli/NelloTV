@@ -204,7 +204,7 @@
 
                 <com.nello.tvhome.GlassView
                     android:id="@+id/searchGlass"
-                    android:layout_width="560dp"
+                    android:layout_width="616dp"
                     android:layout_height="48dp">
 
                     <EditText
@@ -222,21 +222,6 @@
                         android:textColorHint="@color/text_faint"
                         android:textSize="17sp" />
                 </com.nello.tvhome.GlassView>
-
-                    <!-- the search bar's second half: same glass, round, mic icon -->
-                    <com.nello.tvhome.GlassView
-                        android:id="@+id/voiceButton"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="8dp"
-                        android:clickable="true"
-                        android:contentDescription="Cerca con la voce"
-                        android:focusable="true">
-
-                        <com.nello.tvhome.StatusIcon
-                            android:id="@+id/voiceIcon"
-                            style="@style/BarGlyph" />
-                    </com.nello.tvhome.GlassView>
                 </LinearLayout>
 
             </LinearLayout>

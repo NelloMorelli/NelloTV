@@ -42,7 +42,7 @@ Nello TV prende il posto della home di Amazon su una Fire TV Stick (provato su F
 - **Film / Serie TV** — cataloghi TMDB (popolari, al cinema, in arrivo, di tendenza) e le Top 10 italiane per servizio di streaming. I titoli si aprono in Nuvio.
 - **TV** — guida TV italiana: *In onda ora*, *Stasera*, Sky Cinema e Sky Intrattenimento. Rai apre RaiPlay, Mediaset apre Mediaset Infinity, Sky apre Sportio sul canale.
 - **Sport** — partite di oggi (Serie A e squadre italiane in Europa), prossimi eventi, Formula 1, risultati; classifiche, calendario della tua squadra, pagina della partita.
-- **Cerca** — film e serie, anche con la voce.
+- **Cerca** — film, serie e app.
 
 **Navigazione**
 - Un grande carosello per scheda; **↑ / ↓** passano da un catalogo all'altro (i pallini a sinistra indicano dove sei), **↑** sul primo porta al menu in alto, **↓** sull'ultimo porta al dock. **Indietro** riporta sempre al menu in alto.

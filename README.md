@@ -42,7 +42,7 @@ It's a personal project: it doesn't play any content itself, it only shows what'
 - **Film / Serie TV** — TMDB catalogues (popular, in cinemas, upcoming, trending) and the Italian Top 10s by streaming service. Titles open in Nuvio.
 - **TV** — Italian TV guide: *In onda ora*, *Stasera*, Sky Cinema and Sky entertainment channels. Rai opens RaiPlay, Mediaset opens Mediaset Infinity, Sky opens Sportio on the channel.
 - **Sport** — today's matches (Serie A and Italian clubs in Europe), upcoming events, Formula 1, results; standings, your team's calendar, match pages.
-- **Cerca** — search films and series, with voice input.
+- **Cerca** — search films, series and apps.
 
 **Navigation**
 - One large carousel per tab; **↑ / ↓** move between catalogues (dots on the left show where you are), **↑** on the first goes to the top menu, **↓** on the last goes to the dock. **Back** always returns to the top menu.

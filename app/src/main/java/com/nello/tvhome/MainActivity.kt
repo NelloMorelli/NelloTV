@@ -618,7 +618,7 @@ class MainActivity : ComponentActivity(), Host {
     private fun setGlass(source: android.graphics.Bitmap?) {
         lifecycleScope.launch {
             GlassView.blurred = source?.let { withContext(Dispatchers.Default) { GlassView.makeBlur(it) } }
-            listOf(R.id.rightBar, R.id.dock, R.id.searchGlass, R.id.voiceButton).forEach { findViewById<View>(it).invalidate() }
+            listOf(R.id.rightBar, R.id.dock, R.id.searchGlass).forEach { findViewById<View>(it).invalidate() }
         }
     }
 
@@ -1172,15 +1172,6 @@ class MainActivity : ComponentActivity(), Host {
     // ---------------------------------------------------------------- search
 
     private fun setupSearch() {
-        val voiceIcon = findViewById<StatusIcon>(R.id.voiceIcon).apply { kind = StatusIcon.Kind.MIC }
-        findViewById<GlassView>(R.id.voiceButton).apply {
-            frosted = true
-            solidFocus = true
-            zoomOnFocus = false
-            // focused: white circle, dark mic (like the top-right icons)
-            setOnFocusChangeListener { _, has -> voiceIcon.ink = if (has) 1f else 0f }
-            setOnClickListener { startVoiceSearch() }
-        }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -1209,13 +1200,6 @@ class MainActivity : ComponentActivity(), Host {
      * 🎤 Voce: Fire OS gives apps no speech engine, but its keyboard does dictation:
      * open the keyboard on the search field and hold the remote's Alexa button to speak.
      */
-    private fun startVoiceSearch() {
-        searchInput.requestFocus()
-        searchInput.setText("")
-        (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(searchInput, InputMethodManager.SHOW_FORCED)
-        Toast.makeText(this, "Tieni premuto il tasto Alexa (🎤) sul telecomando e di' cosa cerchi", Toast.LENGTH_LONG).show()
-    }
-
     private suspend fun runSearch(query: String) {
         if (query.length < 2) {
             searchRows = emptyList()
