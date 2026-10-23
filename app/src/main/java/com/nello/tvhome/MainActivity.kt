@@ -515,14 +515,39 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
+    /**
+     * Vertical navigation as one clear column:
+     *   tabs  →  label (Oggi ▾ / ⟳ Altri per te)  →  carousel  →  dock  →  rows below
+     * Up from the label goes to the current tab (not the top-right menu); down from the tabs
+     * goes straight to the carousel's wide card; Back from anywhere goes to the current tab.
+     */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
-        // up from the carousel stops on the label at the top right (⟳ Altri per te / catalog picker) before the tabs
-        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-            isSingle(current) && carousel.hasFocus() && catalogLabel.isShown
-        ) {
-            catalogLabel.requestFocus()
-            return true
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && isSingle(current)) {
+            val tabsFocused = findViewById<View>(R.id.tabGroup).hasFocus()
+            when (event.keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> when {
+                    carousel.hasFocus() && catalogLabel.isShown -> { catalogLabel.requestFocus(); return true }
+                    catalogLabel.isFocused || (carousel.hasFocus() && !catalogLabel.isShown) -> {
+                        tabs[current.ordinal].requestFocus(); return true
+                    }
+                }
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> when {
+                    tabsFocused -> {
+                        // switch to the highlighted tab right away (no waiting) and go into it
+                        tabJob?.cancel()
+                        val target = Section.entries.getOrNull(tabs.indexOfFirst { it.isFocused }) ?: current
+                        if (target == Section.SEARCH) {
+                            if (current != Section.SEARCH) show(Section.SEARCH)
+                            searchInput.requestFocus()
+                        } else {
+                            if (target != current) show(target, focusContent = true) else focusFirstCard()
+                        }
+                        return true
+                    }
+                    catalogLabel.isFocused -> { focusFirstCard(); return true }
+                }
+            }
         }
         return super.dispatchKeyEvent(event)
     }
