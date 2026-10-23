@@ -16,10 +16,11 @@ import java.net.URL
  */
 object Updater {
 
-    /** "0.39": the name of a version number (this build's, or a release's on GitHub). */
-    fun name(code: Int = BuildConfig.VERSION_CODE) = "${BuildConfig.VERSION_MAJOR}.${code - BuildConfig.VERSION_START}"
+    /** This build's name ("0.9.9"). */
+    fun name() = BuildConfig.VERSION_NAME
 
-    class Release(val version: Int, val notes: String, val apiAssetUrl: String)
+    /** [name]: the release's title without "Nello TV " (e.g. "1.0"). */
+    class Release(val version: Int, val name: String, val notes: String, val apiAssetUrl: String)
 
     val configured get() = BuildConfig.UPDATE_REPO.isNotBlank() && BuildConfig.UPDATE_TOKEN.isNotBlank()
 
@@ -36,7 +37,8 @@ object Updater {
         if (version <= BuildConfig.VERSION_CODE) return null
         val assets = o.optJSONArray("assets") ?: return null
         val apk = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(".apk") } ?: return null
-        return Release(version, o.optString("body").trim(), apk.getString("url"))
+        val name = o.optString("name").removePrefix("Nello TV").trim().ifBlank { "build $version" }
+        return Release(version, name, o.optString("body").trim(), apk.getString("url"))
     }
 
     /** Download the APK (private repo: through the API with the token) and open the installer. */

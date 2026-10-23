@@ -9,9 +9,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 ./gradlew -q assembleRelease
 V=$(git rev-list --count HEAD)
-MAJOR=$(grep '^major=' version.properties | cut -d= -f2)
-START=$(grep '^start=' version.properties | cut -d= -f2)
-NAME="$MAJOR.$((V - START))"
+NAME=$(grep '^name=' version.properties | cut -d= -f2)
 mkdir -p build
 cp app/build/outputs/apk/release/app-release.apk "build/NelloTV-v$V.apk"
 git push -q origin main

@@ -277,7 +277,7 @@ class MainActivity : ComponentActivity(), Host {
             if (!manual && seen.getInt("offered", 0) == r.version) return@launch
             seen.edit().putInt("offered", r.version).apply()
             val p = GlassPopup(this@MainActivity, widthDp = 420)
-                .title("Aggiornamento disponibile", "Versione ${Updater.name(r.version)} · ora hai la ${Updater.name()}")
+                .title("Aggiornamento disponibile", "Versione ${r.name} · ora hai la ${Updater.name()}")
             if (r.notes.isNotBlank()) p.text(r.notes.take(400))
             p.button("Installa ora") {
                 toast("Scarico l'aggiornamento…")
@@ -539,7 +539,7 @@ class MainActivity : ComponentActivity(), Host {
         p.button("Impostazioni della Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
         val job = lifecycleScope.launch {
             val r = if (Updater.configured) runCatching { Updater.check() }.getOrNull() else null
-            status.text = "Versione ${Updater.name()} · " + (r?.let { "disponibile la ${Updater.name(it.version)}" } ?: "aggiornato")
+            status.text = "Versione ${Updater.name()} · " + (r?.let { "disponibile la ${it.name}" } ?: "aggiornato")
         }
         p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.settingsButton))

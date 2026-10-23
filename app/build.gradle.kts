@@ -15,10 +15,8 @@ val gitCount = runCatching {
     providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }.standardOutput.asText.get().trim().toInt()
 }.getOrDefault(1)
 
-// the name you see ("0.39"): major.(commits since start) — see version.properties
-val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
-val versionMajor = versionProps.getProperty("major", "0").toInt()
-val versionStart = versionProps.getProperty("start", "0").toInt()
+// the name you see ("0.9.9"): version.properties
+val appVersionName = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }.getProperty("name", "0.0")
 
 android {
     namespace = "com.nello.tvhome"
@@ -29,9 +27,7 @@ android {
         minSdk = 25
         targetSdk = 34
         versionCode = gitCount
-        versionName = "$versionMajor.${gitCount - versionStart}"
-        buildConfigField("int", "VERSION_MAJOR", "$versionMajor")
-        buildConfigField("int", "VERSION_START", "$versionStart")
+        versionName = appVersionName
         buildConfigField("String", "TMDB_KEY", localProp("tmdb.key"))
         buildConfigField("String", "TOPX_BASE", localProp("topx.base"))
         buildConfigField("String", "SPORTS_BASE", localProp("sports.base"))
