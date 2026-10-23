@@ -118,8 +118,6 @@ object Tmdb {
         return logo
     }
 
-    private val titleArt = HashMap<String, String?>()
-
     /** A backdrop for a TV programme title (film or series), if TMDB recognises it. Cached. */
     suspend fun backdropForTitle(title: String): String? {
         // "Mio fratello è un vichingo - The Last Viking", "Champions League Remix Ep.3 23/10/2026"…:
@@ -131,9 +129,12 @@ object Tmdb {
         return null
     }
 
-    private suspend fun exactBackdrop(title: String): String? {
+    private val titleHits = HashMap<String, JSONObject?>()
+
+    /** The film/series TMDB has under exactly this name. Cached. */
+    private suspend fun hit(title: String): JSONObject? {
         val key = title.lowercase().trim()
-        if (titleArt.containsKey(key)) return titleArt[key]
+        if (titleHits.containsKey(key)) return titleHits[key]
         val q = java.net.URLEncoder.encode(title, "UTF-8")
         val r = runCatching {
             val res = JSONObject(Net.get(url("/search/multi", "&query=$q&include_adult=false"))).optJSONArray("results") ?: JSONArray()
@@ -141,10 +142,21 @@ object Tmdb {
                 .filter { it.optString("media_type") in setOf("movie", "tv") }
                 // only a close name match, so news and talk shows don't get a random film's image
                 .firstOrNull { (it.str("title") ?: it.str("name"))?.equals(title, ignoreCase = true) == true }
-                ?.str("backdrop_path")?.let { "$IMG/w780$it" }
         }.getOrNull()
-        titleArt[key] = r
+        titleHits[key] = r
         return r
+    }
+
+    private suspend fun exactBackdrop(title: String): String? =
+        hit(title)?.str("backdrop_path")?.let { "$IMG/w780$it" }
+
+    /** TMDB's rating for a programme title (0 if unknown or too few votes). */
+    suspend fun voteForTitle(title: String): Double {
+        val clean = title.substringBefore(" - ").trim()
+        for (c in listOf(title, clean).distinct()) hit(c)?.let { h ->
+            return if (h.optInt("vote_count") >= 50) h.optDouble("vote_average", 0.0) else 0.0
+        }
+        return 0.0
     }
 
     fun poster(d: JSONObject) = d.str("poster_path")?.let { "$IMG/w342$it" }

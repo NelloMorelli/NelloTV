@@ -74,18 +74,26 @@ class Notifier(private val service: AccessibilityService) {
         fun soon(start: Long) = start - now in 5 * 60_000L..15 * 60_000L
 
         Espn.napoliToday().filter { it.state == "pre" && soon(it.startMillis) }.forEach { m ->
-            if (once("m:${m.id}")) show(
-                "${m.home} – ${m.away}",
-                "${m.league.label} · tra ${(m.startMillis - now) / 60_000} minuti · ${Espn.kickoff(m)}",
-                SportArt.forMatch(m) ?: m.homeLogo,
-            ) { openMatch(m) }
+            if (once("m:${m.id}")) {
+                val channel = Sportio.channelFor(service, m)
+                show(
+                    "${m.home} – ${m.away}",
+                    "${m.league.label} · tra ${(m.startMillis - now) / 60_000} min su $channel",
+                    SportArt.forMatch(m) ?: m.homeLogo,
+                    hint = "Premi OK per guardarla",
+                ) { Sportio.watch(service, channel) }
+            }
         }
         Espn.f1Today().filter { it.state == "pre" && soon(it.startMillis) }.forEach { r ->
-            if (once("f1:${r.grandPrix}:${r.sessionEn}")) show(
-                "Ferrari · ${r.grandPrix}",
-                "${r.session} tra ${(r.startMillis - now) / 60_000} minuti · ${Espn.kickoff(r.startMillis)}",
-                SportArt.forRace(r),
-            ) { openRace(r) }
+            if (once("f1:${r.grandPrix}:${r.sessionEn}")) {
+                val channel = Sportio.channelFor(r)
+                show(
+                    "Ferrari · ${r.grandPrix}",
+                    "${r.session} tra ${(r.startMillis - now) / 60_000} min su $channel",
+                    SportArt.forRace(r),
+                    hint = "Premi OK per guardarla",
+                ) { Sportio.watch(service, channel) }
+            }
         }
         // new episodes: every 6 hours is plenty
         if (now - lastEpisodeCheck > 6 * 3600_000L) {
@@ -101,30 +109,15 @@ class Notifier(private val service: AccessibilityService) {
         }
     }
 
-    private suspend fun openMatch(m: Match) {
-        val id = runCatching { SportsAddon.findAnyMatch(m) }.getOrNull()
-        if (id != null) Apps(service).openNuvioContent(id, "sport") else openLauncherSport()
-    }
-
-    private suspend fun openRace(r: RaceSession) {
-        val id = runCatching { SportsAddon.findRace(r) }.getOrNull()
-        if (id != null) Apps(service).openNuvioContent(id, "sport") else openLauncherSport()
-    }
-
-    private fun openLauncherSport() {
-        service.startActivity(
-            Intent(service, MainActivity::class.java)
-                .setAction(MainActivity.ACTION_OPEN_SPORT)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    }
-
     private fun dp(v: Int) = (v * service.resources.displayMetrics.density).toInt()
 
     /** Glass-like card in the top-right corner for 12 seconds. */
-    fun show(title: String, text: String, image: String?, open: suspend () -> Unit) {
+    fun show(title: String, text: String, image: String?, hint: String = "Lo trovi in Nello TV", open: suspend () -> Unit) {
         hide()
         onOpen = { scope.launch { open() } }
+        // only while an actionable banner is up, the service reads the remote (OK opens it):
+        // reading keys all the time slowed every press down
+        if (hint != "Lo trovi in Nello TV") listenKeys(true)
         val card = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -156,7 +149,7 @@ class Notifier(private val service: AccessibilityService) {
                 maxLines = 2
             })
             addView(TextView(service).apply {
-                this.text = "Lo trovi in Nello TV"
+                this.text = hint
                 textSize = 12f
                 setTextColor(0x99FFFFFF.toInt())
                 setPadding(0, dp(4), 0, 0)
@@ -176,7 +169,17 @@ class Notifier(private val service: AccessibilityService) {
         hideJob = scope.launch { delay(12_000); hide() }
     }
 
+    private fun listenKeys(on: Boolean) {
+        runCatching {
+            service.serviceInfo = service.serviceInfo.apply {
+                flags = if (on) flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+                else flags and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+            }
+        }
+    }
+
     fun hide() {
+        listenKeys(false)
         hideJob?.cancel()
         banner?.let { runCatching { wm.removeView(it) } }
         banner = null

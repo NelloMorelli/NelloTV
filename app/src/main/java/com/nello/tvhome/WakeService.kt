@@ -57,6 +57,16 @@ class WakeService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    /** Only called while a banner with an action is visible: OK opens it, other keys pass. */
+    override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+        val n = notifier ?: return false
+        if (!n.isShowing) return false
+        val ok = event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+        if (!ok) return false
+        if (event.action == android.view.KeyEvent.ACTION_UP) n.open()
+        return true
+    }
+
     /** Close Amazon's screensaver left under ours. */
     fun dismissAmbient() {
         android.os.Handler(mainLooper).postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 150)
@@ -77,7 +87,9 @@ class WakeService : AccessibilityService() {
     companion object {
         /** for the "test notification" button in the settings */
         var instance: WakeService? = null
-        fun testBanner() = instance?.notifier?.show("Napoli – Inter", "Serie A · tra 10 minuti · 20:45", null) {}
+        fun testBanner() = instance?.notifier?.show("Napoli – Inter", "Serie A · tra 10 min su DAZN 1", null, hint = "Premi OK per guardarla") {
+            instance?.let { Sportio.watch(it, "DAZN 1") }
+        }
 
         private const val AMAZON_HOME = "com.amazon.tv.launcher"
         private const val AMAZON_AMBIENT = "com.amazon.tv.ftvambient"

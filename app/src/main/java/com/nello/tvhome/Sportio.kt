@@ -53,9 +53,13 @@ object Sportio {
         return cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true }
     }
 
+    private fun prefs(c: Context) = c.getSharedPreferences("sportio", Context.MODE_PRIVATE)
+
     /** Turn the WireGuard tunnel on (if it isn't) and wait up to 5 s for it. False if it didn't come up. */
     suspend fun wireguardUp(c: Context, tunnel: String): Boolean {
         if (vpnUp(c)) return true
+        // we turned it on: we turn it off when you're back on the launcher
+        prefs(c).edit().putString("vpnByUs", tunnel).apply()
         runCatching {
             c.sendBroadcast(Intent("com.wireguard.android.action.SET_TUNNEL_UP")
                 .setClassName(WIREGUARD, "com.wireguard.android.model.TunnelManager\$IntentReceiver")
@@ -66,6 +70,25 @@ object Sportio {
             if (vpnUp(c)) return true
         }
         return false
+    }
+
+    /** Back on the launcher: switch off the tunnel we switched on (never one you started yourself). */
+    fun wireguardDownIfOurs(c: Context) {
+        val tunnel = prefs(c).getString("vpnByUs", null) ?: return
+        prefs(c).edit().remove("vpnByUs").apply()
+        runCatching {
+            c.sendBroadcast(Intent("com.wireguard.android.action.SET_TUNNEL_DOWN")
+                .setClassName(WIREGUARD, "com.wireguard.android.model.TunnelManager\$IntentReceiver")
+                .putExtra("tunnel", tunnel))
+        }
+    }
+
+    /** WireGuard (if set and allowed), then the channel. */
+    suspend fun watch(c: Context, channel: String) {
+        val tunnel = LauncherPrefs(c).sportVpn
+        if (tunnel != null && c.checkSelfPermission(WG_PERMISSION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            wireguardUp(c, tunnel)
+        play(c, channel)
     }
 
     fun play(c: Context, channel: String): Boolean = runCatching {

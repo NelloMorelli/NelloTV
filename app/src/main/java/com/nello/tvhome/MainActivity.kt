@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity(), Host {
         const val ACTION_OPEN_SPORT = "com.nello.tvhome.OPEN_SPORT"
         const val ACTION_CHECK_UPDATE = "com.nello.tvhome.CHECK_UPDATE"
         const val ACTION_SCREENSAVER = "com.nello.tvhome.SCREENSAVER"
+        const val ACTION_TEST_BANNER = "com.nello.tvhome.TEST_BANNER"
     }
 
     /** Order matches the tabs in the top bar. */
@@ -743,6 +744,7 @@ class MainActivity : ComponentActivity(), Host {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: back to the top of Esplora
+        if (intent.action == ACTION_TEST_BANNER) { WakeService.testBanner(); return }
         if (intent.action == ACTION_SCREENSAVER) {
             idleHandler.postDelayed({ startScreensaver() }, 600)
             return
@@ -769,6 +771,8 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun onResume() {
         super.onResume()
+        // back from Sportio: the VPN we switched on goes off again
+        Sportio.wireguardDownIfOurs(this)
         // something changed in Personalizza: rebuild the home with it
         if (Theme.signature(this) != themeSig || appNamesSig != getSharedPreferences("app_names", MODE_PRIVATE).all.toString()) {
             recreate()
@@ -1239,6 +1243,15 @@ class MainActivity : ComponentActivity(), Host {
         val series = async {
             picks.await().filter { it.type == "series" }.ifEmpty { runCatching { Tmdb.list("/trending/tv/week", "series", page = perTePage + 1) }.getOrElse { emptyList() } }
         }
+        // tonight's best film on Sky Cinema (by TMDB rating), until it ends
+        val tonight = async {
+            runCatching {
+                TvGuide.primeTime(TvGuide.shows(this@MainActivity), TvGuide.skyCinema)
+                    .filter { it.stop > System.currentTimeMillis() }
+                    .map { it to Tmdb.voteForTitle(it.title) }
+                    .maxByOrNull { it.second }?.first
+            }.getOrNull()
+        }
         val sport: List<Any> = (napoli.await() + f1.await()).sortedBy {
             when (it) {
                 is Match -> it.startMillis
@@ -1252,7 +1265,7 @@ class MainActivity : ComponentActivity(), Host {
         // each refresh shows the next 16 (wrapping round), so "Altri per te" brings new titles
         val start = if (all.isEmpty()) 0 else (perTePage * 16) % all.size
         val mixed = (all.drop(start) + all.take(start)).take(16)
-        sport + mixed
+        sport + listOfNotNull(tonight.await()) + mixed
     }
 
     /**
@@ -1944,6 +1957,10 @@ class MainActivity : ComponentActivity(), Host {
         startActivity(Intent(this, SportPagesActivity::class.java).putExtra(SportPagesActivity.EXTRA_PAGE, page))
 
     override fun onTvFocused(show: TvShow) {
+        if (current == Section.EXPLORE) {
+            setCarouselInfo("Stasera in TV · ${show.channel.name} alle ${TvGuide.time(show.start)}", "")
+            return
+        }
         setCarouselInfo("${show.channel.name} · ${show.title}",
             listOfNotNull("${TvGuide.time(show.start)} – ${TvGuide.time(show.stop)}", show.category, if (show.isOn) "In onda" else null).joinToString(" · "))
     }
