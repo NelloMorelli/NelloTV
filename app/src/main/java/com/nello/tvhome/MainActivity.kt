@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity(), Host {
     private lateinit var hero: View
     private lateinit var carousel: RowList
     private lateinit var carouselTitle: TextView
+    private lateinit var carouselEyebrow: TextView
     private lateinit var carouselMeta: TextView
     private lateinit var catalogLabel: TextView
     private lateinit var dockList: RowList
@@ -186,6 +187,7 @@ class MainActivity : ComponentActivity(), Host {
         hero = findViewById(R.id.hero)
         carousel = findViewById(R.id.carousel)
         carouselTitle = findViewById(R.id.carouselTitle)
+        carouselEyebrow = findViewById(R.id.carouselEyebrow)
         carouselMeta = findViewById(R.id.carouselMeta)
         catalogLabel = findViewById(R.id.catalogLabel)
         dockList = findViewById(R.id.dockList)
@@ -1024,8 +1026,10 @@ class MainActivity : ComponentActivity(), Host {
         updateSearchTab()
         refreshDock()
         val singleMode = isSingle(section)
-        val infoUnder = if (Theme.showCardInfo && (section == Section.EXPLORE || section == Section.SPORT || section == Section.TV)) View.VISIBLE else View.GONE
+        // every carousel tab has its title and details above the cards
+        val infoUnder = if (Theme.showCardInfo && section != Section.SEARCH) View.VISIBLE else View.GONE
         carouselTitle.visibility = infoUnder
+        if (infoUnder != View.VISIBLE) carouselEyebrow.visibility = View.GONE
         carouselMeta.visibility = infoUnder
         val dp = resources.displayMetrics.density
         val gap = resources.getDimensionPixelSize(R.dimen.dock_bottom)
@@ -1033,7 +1037,9 @@ class MainActivity : ComponentActivity(), Host {
         // 12dp of padding above and below its cards)
         val pad = (12 * dp).toInt()
         findViewById<View>(R.id.dock).updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin = gap - pad }
-        carousel.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin = if (infoUnder == View.VISIBLE) gap - pad else 0 }
+        // proximity: the text sits close to the cards it describes (closer than to anything else)
+        val near = resources.getDimensionPixelSize(R.dimen.inner_gap)
+        carousel.updateLayoutParams<ViewGroup.MarginLayoutParams> { topMargin = if (infoUnder == View.VISIBLE) near - pad else 0 }
         below.visibility = if (hasBelow(section)) View.VISIBLE else View.GONE
         findViewById<TextView>(R.id.bentoTitle).text = if (section == Section.SPORT) "App sport" else "Tutte le app"
         if (changed) { shownContinue = null; shownBento = null }
@@ -1665,9 +1671,11 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
-    private fun setCarouselInfo(title: String, meta: String) {
+    private fun setCarouselInfo(title: String, meta: String, eyebrow: String? = null) {
         carouselTitle.text = title
         carouselMeta.text = meta
+        carouselEyebrow.text = eyebrow.orEmpty()
+        carouselEyebrow.visibility = if (!eyebrow.isNullOrBlank() && carouselTitle.visibility == View.VISIBLE) View.VISIBLE else View.GONE
     }
 
     /** "Popolari ora ▾": switch the carousel to another catalog of this tab. */
@@ -1830,15 +1838,17 @@ class MainActivity : ComponentActivity(), Host {
     private fun onMediaFocusedInfo(item: MediaItem) {
         if (item.action == MediaItem.Action.LINK_NUVIO) setCarouselInfo("Collega Nuvio", "Premi OK per vedere qui i tuoi progressi")
         // Per te: just the poster and why it's there
-        else if (current == Section.EXPLORE) setCarouselInfo(item.reason.orEmpty(), "")
-        else setCarouselInfo(item.title, listOfNotNull(
-            if (item.type == "movie") "Film" else "Serie TV",
-            item.year,
-            item.rating?.let { "★ $it" },
-            item.badge,
-            item.progress?.let { "${(it * 100).toInt()}% visto" },
-            item.reason,
-        ).joinToString(" · "))
+        else {
+            setCarouselInfo(item.title, listOfNotNull(
+                if (item.type == "movie") "Film" else "Serie TV",
+                item.year,
+                item.rating?.let { "★ $it" },
+                item.badge,
+                item.progress?.let { "${(it * 100).toInt()}% visto" },
+            ).joinToString(" · "),
+                // Per te: why it's suggested, as a small line above the title
+                eyebrow = item.reason.takeIf { current == Section.EXPLORE })
+        }
     }
 
     /** Old-style hero at the top (Cerca). */

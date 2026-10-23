@@ -323,6 +323,24 @@
                 android:layout_height="0dp"
                 android:layout_weight="1" />
 
+            <!-- small line above the title: why a "Per te" title is suggested -->
+            <TextView
+                android:id="@+id/carouselEyebrow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="46dp"
+                android:layout_marginEnd="46dp"
+                android:layout_marginBottom="2dp"
+                android:ellipsize="end"
+                android:fontFamily="@font/poppins_medium"
+                android:letterSpacing="0.02"
+                android:maxLines="1"
+                android:shadowColor="#CC000000"
+                android:shadowRadius="6"
+                android:textColor="@color/text_faint"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/carouselTitle"
                 android:layout_width="match_parent"
