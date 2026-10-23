@@ -320,22 +320,10 @@
                 android:textColor="@color/tab_text"
                 android:textSize="15sp" />
 
-            <com.nello.tvhome.RowList
-                android:id="@+id/carousel"
-                android:layout_width="match_parent"
-                android:layout_height="234dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:paddingStart="44dp"
-                android:paddingTop="12dp"
-                android:paddingEnd="44dp"
-                android:paddingBottom="12dp" />
-
             <TextView
                 android:id="@+id/carouselTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/inner_gap"
                 android:layout_marginStart="46dp"
                 android:layout_marginEnd="46dp"
                 android:ellipsize="end"
@@ -358,6 +346,17 @@
                 android:shadowRadius="6"
                 android:textColor="@color/text_dim"
                 android:textSize="13sp" />
+
+            <com.nello.tvhome.RowList
+                android:id="@+id/carousel"
+                android:layout_width="match_parent"
+                android:layout_height="234dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:paddingStart="44dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="44dp"
+                android:paddingBottom="12dp" />
 
             <com.nello.tvhome.GlassView
                 android:id="@+id/dock"
