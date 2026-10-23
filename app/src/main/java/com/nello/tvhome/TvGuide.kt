@@ -17,7 +17,14 @@ import java.util.TimeZone
 import java.util.zip.GZIPInputStream
 
 /** An Italian TV channel and the app that plays it. */
-data class TvChannel(val id: String, val name: String, val app: String, val logo: String? = null)
+data class TvChannel(
+    val id: String,
+    val name: String,
+    val app: String,
+    val logo: String? = null,
+    /** exact channel name in Sportio, when it plays there */
+    val sportio: String? = null,
+)
 
 /** One programme in the guide. */
 data class TvShow(
@@ -62,6 +69,36 @@ object TvGuide {
         TvChannel("cielo.it", "Cielo", IPTV),
     )
 
+    private fun sky(id: String, name: String, sportio: String = name) = TvChannel(id, name, Sportio.PKG, sportio = sportio)
+
+    /** Sky, played in Sportio */
+    val skyCinema = listOf(
+        sky("Sky.Cinema.Uno.it", "Sky Cinema Uno"),
+        sky("Sky.Cinema.Uno.+24.it", "Sky Cinema Uno +24"),
+        sky("Sky.Cinema.Action.it", "Sky Cinema Action"),
+        sky("Sky.Cinema.Comedy.it", "Sky Cinema Comedy"),
+        sky("Sky.Cinema.Drama.it", "Sky Cinema Drama"),
+        sky("Sky.Cinema.Suspense.it", "Sky Cinema Suspense"),
+        sky("Sky.Cinema.Romance.it", "Sky Cinema Romance"),
+        sky("Sky.Cinema.Family.it", "Sky Cinema Family"),
+        sky("Sky.Cinema.Collection.it", "Sky Cinema Collection"),
+    )
+    val skyEntertainment = listOf(
+        sky("Sky.Uno.it", "Sky Uno"),
+        sky("Sky.Atlantic.it", "Sky Atlantic"),
+        sky("Sky.Serie.it", "Sky Serie"),
+        sky("Sky.Investigation.it", "Sky Investigation"),
+        sky("Sky.Crime.it", "Sky Crime"),
+        sky("Sky.Collection.it", "Sky Collection"),
+        sky("Sky.Documentaries.it", "Sky Documentaries"),
+        sky("Sky.Nature.it", "Sky Nature"),
+        sky("Sky.Adventure.it", "Sky Adventure"),
+        sky("History.it", "History", "Sky History"),
+        sky("Sky.Arte.it", "Sky Arte"),
+        sky("Comedy.Central.it", "Comedy Central", "Sky Comedy Central"),
+        sky("MTV.HD.it", "MTV", "Sky MTV"),
+    )
+
     private val lock = Mutex()
     private var cache: List<TvShow>? = null
     private var cacheAt = 0L
@@ -92,7 +129,7 @@ object TvGuide {
 
     private fun parse(f: File): List<TvShow> {
         // the TV tab's channels plus the sports ones (to find which channel shows a match)
-        val byId = channels.associateBy { it.id } + Sportio.channels.filter { it.id !in channels.map { c -> c.id } }.associateBy { it.id }
+        val byId = Sportio.channels.associateBy { it.id } + (skyCinema + skyEntertainment + channels).associateBy { it.id }
         val logos = HashMap<String, String>()
         val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
         val now = System.currentTimeMillis()
@@ -132,17 +169,17 @@ object TvGuide {
     }
 
     /** What's on now, one per channel, in channel order. */
-    fun onNow(all: List<TvShow>): List<TvShow> =
-        channels.mapNotNull { c -> all.firstOrNull { it.channel.id == c.id && it.isOn } }
+    fun onNow(all: List<TvShow>, list: List<TvChannel> = channels): List<TvShow> =
+        list.mapNotNull { c -> all.firstOrNull { it.channel.id == c.id && it.isOn } }
 
     /** Tonight's prime time: the first programme starting 20:55–21:45 on each channel. */
-    fun primeTime(all: List<TvShow>): List<TvShow> {
+    fun primeTime(all: List<TvShow>, list: List<TvChannel> = channels): List<TvShow> {
         val rome = TimeZone.getTimeZone("Europe/Rome")
         fun at(h: Int, m: Int) = Calendar.getInstance(rome).apply {
             set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m); set(Calendar.SECOND, 0)
         }.timeInMillis
         val from = at(20, 55); val to = at(21, 45)
-        return channels.mapNotNull { c -> all.firstOrNull { it.channel.id == c.id && it.start in from..to } }
+        return list.mapNotNull { c -> all.firstOrNull { it.channel.id == c.id && it.start in from..to } }
     }
 
     fun time(ms: Long): String =

@@ -28,7 +28,7 @@ class CustomizeActivity : GlassPage() {
             "Serie TV" to listOf("series_trend" to "Di tendenza", "series_popular" to "Popolari ora", "series_onair" to "Nuovi episodi") +
                 TopX.services.map { (id, n) -> "series_tx_$id" to "Top 10 su $n" },
             "Sport" to listOf("sport_today" to "Oggi", "sport_next" to "Prossimi eventi", "sport_f1" to "Formula 1", "sport_done" to "Risultati"),
-            "TV" to listOf("tv_now" to "In onda ora", "tv_prime" to "Stasera"),
+            "TV" to listOf("tv_now" to "In onda ora", "tv_prime" to "Stasera", "tv_sky_cinema" to "Sky Cinema", "tv_sky_ent" to "Sky Intrattenimento", "tv_sky_prime" to "Sky · stasera"),
         )
         val TABS = listOf("SEARCH" to "Cerca", "MOVIES" to "Film", "SERIES" to "Serie TV", "TV" to "TV", "SPORT" to "Sport")
 

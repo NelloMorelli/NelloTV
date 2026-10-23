@@ -677,6 +677,12 @@ class MainActivity : ComponentActivity(), Host {
         }
         if (event.action == android.view.KeyEvent.ACTION_DOWN) resetIdle()
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
+        if (scrollsCatalogs(current) && carousel.hasFocus() &&
+            (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                onCatalogKey(if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) -1 else 1)
+            return true
+        }
         if (event.action == android.view.KeyEvent.ACTION_DOWN && isSingle(current)) {
             val tabsFocused = findViewById<View>(R.id.tabGroup).hasFocus()
             when (event.keyCode) {
@@ -799,6 +805,9 @@ class MainActivity : ComponentActivity(), Host {
         Section.TV -> listOf(
             Spec("tv_now", "In onda ora", RowKind.MIXED, mixed = { TvGuide.onNow(TvGuide.shows(this)) }),
             Spec("tv_prime", "Stasera", RowKind.MIXED, mixed = { TvGuide.primeTime(TvGuide.shows(this)) }),
+            Spec("tv_sky_cinema", "Sky Cinema · in onda", RowKind.MIXED, mixed = { TvGuide.onNow(TvGuide.shows(this), TvGuide.skyCinema) }),
+            Spec("tv_sky_ent", "Sky Intrattenimento · in onda", RowKind.MIXED, mixed = { TvGuide.onNow(TvGuide.shows(this), TvGuide.skyEntertainment) }),
+            Spec("tv_sky_prime", "Sky · stasera", RowKind.MIXED, mixed = { TvGuide.primeTime(TvGuide.shows(this), TvGuide.skyCinema + TvGuide.skyEntertainment) }),
         )
         Section.SPORT -> sportSpecs()
     }
@@ -1433,6 +1442,76 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     /** Show the chosen catalog of a single-screen tab in the carousel (only rebinds when its content changed). */
+    // ---------------------------------------------------------------- vertical catalogs
+    // Film, Serie TV and TV: ↑/↓ on the carousel move to the previous/next catalog, round and round.
+    // A quick double ↑ goes to the top menu, a double ↓ to the dock.
+
+    private fun scrollsCatalogs(s: Section) = s == Section.MOVIES || s == Section.SERIES || s == Section.TV
+
+    private var pendingDir = 0
+    private val pendingCatalog = Runnable { val d = pendingDir; pendingDir = 0; cycleCatalog(d) }
+    private val keyHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var catalogAnimating = false
+
+    private fun onCatalogKey(dir: Int) {
+        if (pendingDir == dir) {
+            // second press in time: leave the carousel instead
+            keyHandler.removeCallbacks(pendingCatalog)
+            pendingDir = 0
+            if (dir < 0) tabs[current.ordinal].requestFocus()
+            else dockList.getChildAt(0)?.requestFocus()
+            return
+        }
+        keyHandler.removeCallbacks(pendingCatalog)
+        pendingDir = dir
+        keyHandler.postDelayed(pendingCatalog, 260)
+    }
+
+    /** Catalogs you can scroll to: loaded and not empty. */
+    private fun scrollable(state: SectionState) =
+        state.rows.indices.filter { state.ready[it] && state.rows[it].size > 0 && state.rows[it].kind != RowKind.APPS }
+
+    private fun cycleCatalog(dir: Int) {
+        val state = states[current] ?: return
+        val list = scrollable(state)
+        if (list.size < 2 || catalogAnimating) return
+        val at = list.indexOf(catalogIndex[current] ?: 0).coerceAtLeast(0)
+        val next = list[Math.floorMod(at + dir, list.size)]
+        val d = 48 * resources.displayMetrics.density
+        val views = listOf(catalogLabel, carousel, carouselTitle, carouselMeta)
+        val out = android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f)
+        val inn = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
+        catalogAnimating = true
+        // the current catalog slides away in the direction you pressed, the next one comes from the other side
+        views.forEachIndexed { i, v ->
+            v.animate().cancel()
+            v.animate().translationY(-dir * d).alpha(0f).setStartDelay(0).setDuration(280).setInterpolator(out)
+                .withEndAction(if (i != 0) null else Runnable {
+                    catalogIndex[current] = next
+                    shownCatalog = null
+                    bindSingle(state)
+                    focusFirstCard()
+                    views.forEachIndexed { j, w ->
+                        w.translationY = dir * d
+                        w.animate().translationY(0f).alpha(1f).setStartDelay(j * 30L).setDuration(620).setInterpolator(inn)
+                            .withEndAction(if (j == views.size - 1) Runnable { catalogAnimating = false } else null).start()
+                    }
+                }).start()
+        }
+    }
+
+    /** "Popolari ora  ·  2 / 9" */
+    private fun catalogLabelText(state: SectionState, index: Int): CharSequence {
+        val list = scrollable(state)
+        val pos = list.indexOf(index)
+        val title = state.rows[index].title
+        if (pos < 0 || list.size < 2) return title
+        val counter = "   ${pos + 1} / ${list.size}"
+        return android.text.SpannableString(title + counter).apply {
+            setSpan(android.text.style.ForegroundColorSpan(0x99FFFFFF.toInt()), title.length, length, 0)
+        }
+    }
+
     private fun bindSingle(state: SectionState) {
         val explore = state.section == Section.EXPLORE
         if (hasBelow(state.section)) bindBelow(state)
@@ -1444,7 +1523,13 @@ class MainActivity : ComponentActivity(), Host {
             state.rows.indices.firstOrNull { state.ready[it] && state.rows[it].size > 0 }?.let { index = it }
         }
         val row = state.rows.getOrNull(index) ?: return
-        catalogLabel.text = if (explore) (if (refreshing) "Aggiorno…" else "⟳  Altri per te") else "${row.title}  ▾"
+        catalogLabel.text = when {
+            explore -> if (refreshing) "Aggiorno…" else "⟳  Altri per te"
+            scrollsCatalogs(state.section) -> catalogLabelText(state, index)
+            else -> "${row.title}  ▾"
+        }
+        // where ↑/↓ scroll the catalogs the label is only a title, not a button
+        catalogLabel.isFocusable = !scrollsCatalogs(state.section)
         val items = itemsOf(row)
         if (row === shownCatalog && items == shownItems) {
             showActiveInfo()
@@ -1859,6 +1944,8 @@ class MainActivity : ComponentActivity(), Host {
 
     /** OK on a programme: the channel's app (RaiPlay, Mediaset Infinity, or NeroZone for the rest). */
     override fun onTvClicked(show: TvShow) {
+        // Sky: straight onto the channel in Sportio (with WireGuard, like sport)
+        show.channel.sportio?.let { openOnSportio(it, "${show.channel.name} · ${show.title}"); return }
         if (!apps.launch(show.channel.app)) toast("App per ${show.channel.name} non installata")
     }
 
