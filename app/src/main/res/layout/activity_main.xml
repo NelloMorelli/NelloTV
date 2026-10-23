@@ -131,6 +131,16 @@
                     </FrameLayout>
 
                     <FrameLayout
+                        android:id="@+id/boostButton"
+                        style="@style/BarIcon"
+                        android:contentDescription="Libera memoria">
+
+                        <com.nello.tvhome.StatusIcon
+                            android:id="@+id/boostIcon"
+                            style="@style/BarGlyph" />
+                    </FrameLayout>
+
+                    <FrameLayout
                         android:id="@+id/settingsButton"
                         style="@style/BarIcon"
                         android:contentDescription="Impostazioni">

@@ -11,7 +11,7 @@ import android.view.View
 /** Small top-bar glyphs drawn in code: Wi-Fi with signal bars, Ethernet, offline, VPN shield, gear. */
 class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
-    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR }
+    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, BOOST }
 
     var kind = Kind.WIFI
         set(value) { field = value; invalidate() }
@@ -51,6 +51,7 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             Kind.ETHERNET -> drawEthernet(canvas, s, cx, cy)
             Kind.VPN -> drawShield(canvas, s, cx, cy)
             Kind.GEAR -> drawGear(canvas, s, cx, cy)
+            Kind.BOOST -> drawBoost(canvas, s, cx, cy)
         }
     }
 
@@ -124,6 +125,20 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
         path.close()
         path.addCircle(cx, cy, s * 0.14f, Path.Direction.CCW)
         path.fillType = Path.FillType.EVEN_ODD
+        fill.color = on
+        canvas.drawPath(path, fill)
+    }
+    /** Rocket-ish "boost": a lightning bolt (free up memory). */
+    private fun drawBoost(canvas: Canvas, s: Float, cx: Float, cy: Float) {
+        path.reset()
+        path.moveTo(cx + s * 0.08f, cy - s * 0.46f)
+        path.lineTo(cx - s * 0.26f, cy + s * 0.06f)
+        path.lineTo(cx - s * 0.02f, cy + s * 0.06f)
+        path.lineTo(cx - s * 0.10f, cy + s * 0.46f)
+        path.lineTo(cx + s * 0.26f, cy - s * 0.08f)
+        path.lineTo(cx + s * 0.02f, cy - s * 0.08f)
+        path.close()
+        path.fillType = Path.FillType.WINDING
         fill.color = on
         canvas.drawPath(path, fill)
     }

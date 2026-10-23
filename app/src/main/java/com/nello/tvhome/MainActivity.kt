@@ -258,6 +258,8 @@ class MainActivity : ComponentActivity(), Host {
         findViewById<StatusIcon>(R.id.gearIcon).kind = StatusIcon.Kind.GEAR
         findViewById<StatusIcon>(R.id.vpnIcon).kind = StatusIcon.Kind.VPN
         findViewById<View>(R.id.settingsButton).setOnClickListener { showSettingsPopup() }
+        findViewById<StatusIcon>(R.id.boostIcon).kind = StatusIcon.Kind.BOOST
+        findViewById<View>(R.id.boostButton).setOnClickListener { showBoostPopup() }
         findViewById<View>(R.id.netButton).setOnClickListener { showNetworkPopup() }
         findViewById<View>(R.id.vpnButton).setOnClickListener { showVpnPopup() }
         onNetworkChanged(network.state)
@@ -313,12 +315,41 @@ class MainActivity : ComponentActivity(), Host {
         details["Segnale"]?.let { p.info("Segnale", it.substringBefore(" (")) }
         val ping = p.info("Ping", "…")
         p.info("VPN", if (st.vpn) "Attiva" else "Non attiva")
+        // device status
+        val (freeDisk, totalDisk) = DeviceStatus.storage()
+        val (freeRam, totalRam) = DeviceStatus.memory(this)
+        p.info("Memoria libera", "${DeviceStatus.gb(freeDisk)} di ${DeviceStatus.gb(totalDisk)}")
+        p.info("RAM libera", "${DeviceStatus.gb(freeRam)} di ${DeviceStatus.gb(totalRam)}")
         p.gap()
         p.button("Dettagli e test velocità") { openConnectionDetails() }
         p.button("Impostazioni rete") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } }
         val job = lifecycleScope.launch { ping.text = network.ping()?.let { "$it ms" } ?: "—" }
         p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.netButton))
+    }
+
+    /** ⚡ Libera memoria: close what's left open in the background (Nuvio excluded). */
+    private fun showBoostPopup() {
+        val (freeRam, totalRam) = DeviceStatus.memory(this)
+        val (freeDisk, _) = DeviceStatus.storage()
+        val p = popup().title("Libera memoria", "Chiude le app rimaste aperte in background, tranne Nuvio")
+        val ram = p.info("RAM libera", "${DeviceStatus.gb(freeRam)} di ${DeviceStatus.gb(totalRam)}")
+        p.info("Spazio libero", DeviceStatus.gb(freeDisk))
+        p.gap()
+        lateinit var go: TextView
+        go = p.button("⚡  Libera ora", keepOpen = true) {
+            go.isEnabled = false
+            go.text = "Libero memoria…"
+            lifecycleScope.launch {
+                val gained = withContext(Dispatchers.Default) { DeviceStatus.freeMemory(this@MainActivity, apps) }
+                val (nowFree, total) = DeviceStatus.memory(this@MainActivity)
+                ram.text = "${DeviceStatus.gb(nowFree)} di ${DeviceStatus.gb(total)}"
+                go.text = if (gained > 50L * 1024 * 1024) "Fatto · +${DeviceStatus.gb(gained)} liberi" else "Fatto · era già libera"
+                go.isEnabled = true
+            }
+        }
+        p.button("Gestisci app e cache") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS)) } }
+        p.showUnder(findViewById(R.id.boostButton))
     }
 
     private fun installedVpns() = LauncherPrefs.VPN_APPS.filter { (pkg, _) -> apps.get(listOf(pkg)).isNotEmpty() }
