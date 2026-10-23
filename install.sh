@@ -25,4 +25,4 @@ case "$CUR" in
   *) adb shell "settings put secure enabled_accessibility_services '$CUR:com.nello.tvhome/com.nello.tvhome.WakeService'" ;;
 esac
 adb shell settings put secure accessibility_enabled 1
-echo "Nello TV installato. Scegli Nello TV come home in Home on Fire."
+echo "Nello TV installato: aprila e segui la configurazione iniziale."
