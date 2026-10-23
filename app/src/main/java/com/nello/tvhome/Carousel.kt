@@ -53,23 +53,6 @@ class CarouselAdapter(
         if (i in items.indices) active = i
     }
 
-    // ---------------------------------------------------------------- hero
-    // While the carousel has the focus, the first card becomes the hero: big (heroW × heroH),
-    // the others shrink to 2/3 and line up at its bottom, leaving room above them for the info.
-
-    var heroW = 0; private set
-    var heroH = 0; private set
-    val hero get() = heroW > 0
-
-    /** A new carousel that starts already in hero mode (catalogue changed while in it). */
-    fun presetHero(w: Int, h: Int) { heroW = w; heroH = h }
-
-    /** Hero on ([w] × [h] px) or off (0, 0); visible cards animate to their new size. */
-    fun setHero(w: Int, h: Int, list: RecyclerView) {
-        heroW = w; heroH = h
-        for (i in 0 until list.childCount) (list.getChildViewHolder(list.getChildAt(i)) as? VH)?.relayout(animate = true)
-    }
-
     override fun getItemCount() = items.size
 
     override fun getItemViewType(position: Int) = when (items[position]) {
@@ -399,51 +382,45 @@ class CarouselAdapter(
         /** the first card keeps a little more room after it: it pushes the rest of the row away */
         private fun gapAfter(f: Float) = (px(16) + px(GAP_FIRST) * f).toInt()
 
-        private var isExpanded = false
-
-        /** Size, bottom alignment and following gap for the current state (normal / hero). */
-        fun relayout(animate: Boolean) {
-            val small = 2f / 3f
-            val base = px(if (type == MEDIA) POSTER_W else WIDE_W)
-            val (w, h) = when {
-                !hero -> (if (isExpanded) px(WIDE_W) else base) to px(HEIGHT)
-                isExpanded -> heroW to heroH
-                else -> (base * small).toInt() to (px(HEIGHT) * small).toInt()
-            }
-            val top = if (hero) (heroH - h).coerceAtLeast(0) else 0
-            val end = if (hero && !isExpanded) px(12) else gapAfter(if (isExpanded) 1f else 0f)
-            val lp = card.layoutParams as RecyclerView.LayoutParams
-            widthAnim?.cancel()
-            if (!animate) {
-                card.layoutParams = lp.apply { width = w; height = h; topMargin = top; marginEnd = end }
+        fun setExpanded(expanded: Boolean, animate: Boolean) {
+            if (type != MEDIA) {
+                val to = gapAfter(if (expanded) 1f else 0f)
+                val lp = card.layoutParams as RecyclerView.LayoutParams
+                if (!animate) { card.layoutParams = lp.apply { marginEnd = to }; return }
+                widthAnim?.cancel()
+                widthAnim = ValueAnimator.ofInt(lp.marginEnd, to).apply {
+                    duration = 560
+                    interpolator = DecelerateInterpolator(1.6f)
+                    addUpdateListener { card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply { marginEnd = it.animatedValue as Int } }
+                    start()
+                }
                 return
             }
-            val f = intArrayOf(lp.width, lp.height, lp.topMargin, lp.marginEnd)
-            widthAnim = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 600 // ≈300 ms at 0.5x animation scale
-                interpolator = android.view.animation.PathInterpolator(0.2f, 0.9f, 0.25f, 1f)
-                addUpdateListener {
-                    val t = it.animatedValue as Float
-                    fun mix(a: Int, b: Int) = (a + (b - a) * t).toInt()
-                    card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply {
-                        width = mix(f[0], w); height = mix(f[1], h); topMargin = mix(f[2], top); marginEnd = mix(f[3], end)
-                    }
-                }
-                start()
-            }
-        }
-
-        fun setExpanded(expanded: Boolean, animate: Boolean) {
-            isExpanded = expanded
-            relayout(animate)
-            if (type != MEDIA) return
+            val target = px(if (expanded) WIDE_W else POSTER_W)
+            widthAnim?.cancel()
             val posterAlpha = if (expanded) 0f else 1f
             val wideAlpha = if (expanded) 1f else 0f
+            val gapTo = gapAfter(if (expanded) 1f else 0f)
             if (!animate) {
+                card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply { width = target; marginEnd = gapTo }
                 poster.alpha = posterAlpha
                 rank.alpha = posterAlpha
                 logo.alpha = wideAlpha
                 return
+            }
+            val from = card.layoutParams.width
+            val gapFrom = (card.layoutParams as RecyclerView.LayoutParams).marginEnd
+            widthAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 560 // ≈280 ms at 0.5x animation scale
+                interpolator = DecelerateInterpolator(1.6f)
+                addUpdateListener {
+                    val t = it.animatedValue as Float
+                    card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply {
+                        width = (from + (target - from) * t).toInt()
+                        marginEnd = (gapFrom + (gapTo - gapFrom) * t).toInt()
+                    }
+                }
+                start()
             }
             poster.animate().alpha(posterAlpha).setDuration(560).start()
             // the wide Top 10 artwork already shows its number
