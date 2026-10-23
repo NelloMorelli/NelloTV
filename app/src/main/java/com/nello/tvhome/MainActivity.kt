@@ -105,12 +105,14 @@ class MainActivity : ComponentActivity(), Host {
     private var carouselAdapter: CarouselAdapter? = null
     private var dockApps: List<String> = emptyList()
     private var themeSig = ""
+    private lateinit var catalogDots: CatalogDots
     private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
 
     /** Personalizza: what's on screen, card size, hidden tabs. */
     private fun applyTheme() {
         val dp = resources.displayMetrics.density
         carousel.layoutParams = carousel.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
+        catalogDots.layoutParams = catalogDots.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
         findViewById<View>(R.id.clockTop).visibility = if (Theme.showClock) View.VISIBLE else View.INVISIBLE
         val hidden = Customize.hiddenTabs(this)
         tabs.forEachIndexed { i, t -> t.visibility = if (Section.entries[i].name in hidden) View.GONE else View.VISIBLE }
@@ -185,6 +187,24 @@ class MainActivity : ComponentActivity(), Host {
         catalogLabel = findViewById(R.id.catalogLabel)
         dockList = findViewById(R.id.dockList)
         carousel.layoutManager = StartAlignedLayoutManager(this, RecyclerView.HORIZONTAL)
+        // the catalogue dots live in the space left of the first card
+        catalogDots = CatalogDots(this)
+        (carousel.parent as ViewGroup).let { parent ->
+            val at = parent.indexOfChild(carousel)
+            val lp = carousel.layoutParams
+            parent.removeView(carousel)
+            val frame = android.widget.FrameLayout(this).apply {
+                clipChildren = false
+                clipToPadding = false
+                addView(carousel, android.widget.FrameLayout.LayoutParams(-1, lp.height))
+                // same height as the carousel: the lit dot sits at the cards' middle
+                addView(catalogDots, android.widget.FrameLayout.LayoutParams((24 * resources.displayMetrics.density).toInt(), lp.height).apply {
+                    gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                    marginStart = (10 * resources.displayMetrics.density).toInt()
+                })
+            }
+            parent.addView(frame, at, (lp as? ViewGroup.MarginLayoutParams)?.let { ViewGroup.MarginLayoutParams(it).apply { height = ViewGroup.LayoutParams.WRAP_CONTENT } } ?: ViewGroup.LayoutParams(-1, -2))
+        }
         // room after the last card so even it can slide to the start and open fully on screen
         val wide = (CarouselAdapter.WIDE_W * resources.displayMetrics.density).toInt()
         carousel.setPadding(carousel.paddingLeft, carousel.paddingTop,
@@ -1482,6 +1502,7 @@ class MainActivity : ComponentActivity(), Host {
         val out = android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f)
         val inn = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
         catalogAnimating = true
+        catalogDots.shift(dir)
         // the current catalog slides away in the direction you pressed, the next one comes from the other side
         views.forEachIndexed { i, v ->
             v.animate().cancel()
@@ -1530,6 +1551,7 @@ class MainActivity : ComponentActivity(), Host {
         }
         // where ↑/↓ scroll the catalogs the label is only a title, not a button
         catalogLabel.isFocusable = !scrollsCatalogs(state.section)
+        catalogDots.visibility = if (scrollsCatalogs(state.section) && scrollable(state).size > 1) View.VISIBLE else View.GONE
         val items = itemsOf(row)
         if (row === shownCatalog && items == shownItems) {
             showActiveInfo()

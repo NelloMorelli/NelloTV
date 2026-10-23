@@ -590,3 +590,42 @@ class CarouselAdapter(
         }
     }
 }
+
+/**
+ * Three dots in a column to the left of the carousel: the lit one in the middle is the catalogue
+ * you're on, the faint ones the previous and next (the list goes round, so there's always one).
+ * On ↓ they slide up with the carousel and the next one lights up as it reaches the centre.
+ */
+class CatalogDots(context: android.content.Context) : View(context) {
+    private val dp = resources.displayMetrics.density
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val spacing = 18 * dp
+    private var offset = 0f
+    private var anim: ValueAnimator? = null
+
+    /** The catalogue changed in direction [dir] (+1 = next): slide the column. */
+    fun shift(dir: Int) {
+        anim?.cancel()
+        anim = ValueAnimator.ofFloat(dir.toFloat(), 0f).apply {
+            duration = 720 // ≈360 ms at 0.5x, with the carousel's own slide
+            interpolator = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
+            addUpdateListener { offset = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        for (i in -2..2) {
+            val pos = i + offset
+            val d = Math.abs(pos)
+            if (d >= 2f) continue
+            // lit and larger at the centre, faint and smaller one step away, gone beyond
+            val r = (4.5f - 1.5f * minOf(d, 1f)) * dp
+            val a = if (d <= 1f) 1f - 0.65f * d else 0.35f * (2f - d)
+            paint.alpha = (a * 255).toInt()
+            canvas.drawCircle(cx, cy + pos * spacing, r, paint)
+        }
+    }
+}
