@@ -298,18 +298,15 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- free space above: the carousel sits right on top of the dock -->
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
 
+            <!-- catalogue name / picker: fixed spot, its text right-aligned with the menu and the dock -->
             <TextView
                 android:id="@+id/catalogLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
                 android:layout_gravity="end"
-                android:layout_marginEnd="34dp"
+                android:layout_marginTop="98dp"
+                android:layout_marginEnd="32dp"
                 android:background="@drawable/tab_bg"
                 android:clickable="true"
                 android:focusable="true"
@@ -319,6 +316,12 @@
                 android:paddingEnd="12dp"
                 android:textColor="@color/tab_text"
                 android:textSize="15sp" />
+
+            <!-- free space above: the carousel sits right on top of the dock -->
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/carouselTitle"
