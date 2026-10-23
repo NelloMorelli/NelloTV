@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity(), Host {
     companion object {
         const val ACTION_LINK_NUVIO = "com.nello.tvhome.LINK_NUVIO"
         const val ACTION_OPEN_SPORT = "com.nello.tvhome.OPEN_SPORT"
+        const val ACTION_CHECK_UPDATE = "com.nello.tvhome.CHECK_UPDATE"
     }
 
     /** Order matches the tabs in the top bar. */
@@ -206,7 +207,36 @@ class MainActivity : ComponentActivity(), Host {
         if (section != null && isSingle(section)) pendingCard[section] = resume.getInt("card", 0)
         show(section ?: startSection(), focusContent = true)
         preloadSections()
+        checkForUpdate()
     }
+
+    /** New version on GitHub: offer it once per version (also on every launcher start). */
+    private fun checkForUpdate(manual: Boolean = false) {
+        lifecycleScope.launch {
+            delay(if (manual) 0 else 8_000)
+            val r = runCatching { Updater.check() }.getOrNull()
+            if (r == null) {
+                if (manual) toast(if (Updater.configured) "Nello TV è aggiornato (versione ${BuildConfig.VERSION_CODE})" else "Aggiornamenti non configurati")
+                return@launch
+            }
+            val seen = getSharedPreferences("update", MODE_PRIVATE)
+            if (!manual && seen.getInt("offered", 0) == r.version) return@launch
+            seen.edit().putInt("offered", r.version).apply()
+            val p = GlassPopup(this@MainActivity, widthDp = 420)
+                .title("Aggiornamento disponibile", "Versione ${r.version} · ora hai la ${BuildConfig.VERSION_CODE}")
+            if (r.notes.isNotBlank()) p.text(r.notes.take(400))
+            p.button("Installa ora") {
+                toast("Scarico l'aggiornamento…")
+                lifecycleScope.launch {
+                    runCatching { Updater.install(this@MainActivity, r) }.onFailure { toast("Download non riuscito: ${it.message}") }
+                }
+            }
+            p.button("Più tardi") {}
+            p.showCentered(rowsView)
+        }
+    }
+
+    fun checkForUpdateNow() = checkForUpdate(manual = true)
 
     /** Load the other tabs in the background, so switching tab shows them at once. */
     private fun preloadSections() {
@@ -525,6 +555,10 @@ class MainActivity : ComponentActivity(), Host {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Home pressed while already home: back to the top of Esplora
+        if (intent.action == ACTION_CHECK_UPDATE) {
+            checkForUpdateNow()
+            return
+        }
         if (intent.action == ACTION_OPEN_SPORT) {
             show(Section.SPORT, focusContent = true)
             return
