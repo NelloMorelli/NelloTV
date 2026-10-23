@@ -1473,6 +1473,7 @@ class MainActivity : ComponentActivity(), Host {
     private val pendingCatalog = Runnable { val d = pendingDir; pendingDir = 0; cycleCatalog(d) }
     private val keyHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var catalogAnimating = false
+    private var dotsAnimate = false
 
     private fun onCatalogKey(dir: Int) {
         if (pendingDir == dir) {
@@ -1502,7 +1503,8 @@ class MainActivity : ComponentActivity(), Host {
         val out = android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f)
         val inn = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
         catalogAnimating = true
-        catalogDots.shift(dir)
+        // the highlight glides to the new catalogue right away, with the carousel's slide
+        catalogDots.set(list.size, list.indexOf(next), animate = true)
         // the current catalog slides away in the direction you pressed, the next one comes from the other side
         views.forEachIndexed { i, v ->
             v.animate().cancel()
@@ -1521,17 +1523,8 @@ class MainActivity : ComponentActivity(), Host {
         }
     }
 
-    /** "Popolari ora  ·  2 / 9" */
-    private fun catalogLabelText(state: SectionState, index: Int): CharSequence {
-        val list = scrollable(state)
-        val pos = list.indexOf(index)
-        val title = state.rows[index].title
-        if (pos < 0 || list.size < 2) return title
-        val counter = "   ${pos + 1} / ${list.size}"
-        return android.text.SpannableString(title + counter).apply {
-            setSpan(android.text.style.ForegroundColorSpan(0x99FFFFFF.toInt()), title.length, length, 0)
-        }
-    }
+    /** the catalogue's name (where it is among the others: the dots) */
+    private fun catalogLabelText(state: SectionState, index: Int): CharSequence = state.rows[index].title
 
     private fun bindSingle(state: SectionState) {
         val explore = state.section == Section.EXPLORE
@@ -1551,7 +1544,10 @@ class MainActivity : ComponentActivity(), Host {
         }
         // where ↑/↓ scroll the catalogs the label is only a title, not a button
         catalogLabel.isFocusable = !scrollsCatalogs(state.section)
-        catalogDots.visibility = if (scrollsCatalogs(state.section) && scrollable(state).size > 1) View.VISIBLE else View.GONE
+        val list = scrollable(state)
+        catalogDots.visibility = if (scrollsCatalogs(state.section) && list.size > 1) View.VISIBLE else View.GONE
+        catalogDots.set(list.size, list.indexOf(index).coerceAtLeast(0), animate = dotsAnimate)
+        dotsAnimate = false
         val items = itemsOf(row)
         if (row === shownCatalog && items == shownItems) {
             showActiveInfo()

@@ -592,40 +592,47 @@ class CarouselAdapter(
 }
 
 /**
- * Three dots in a column to the left of the carousel: the lit one in the middle is the catalogue
- * you're on, the faint ones the previous and next (the list goes round, so there's always one).
- * On ↓ they slide up with the carousel and the next one lights up as it reaches the centre.
+ * One dot per catalogue, in a column to the left of the carousel, in catalogue order. The current
+ * one is lit and largest; the others get smaller and fainter the further away they are. Moving to
+ * another catalogue glides the highlight (and the sizes) along the column.
  */
 class CatalogDots(context: android.content.Context) : View(context) {
     private val dp = resources.displayMetrics.density
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-    private val spacing = 18 * dp
-    private var offset = 0f
+    private val spacing = 16 * dp
+    private var count = 0
+    /** the highlight's position, animated between whole numbers */
+    private var at = 0f
+    private var target = 0
     private var anim: ValueAnimator? = null
 
-    /** The catalogue changed in direction [dir] (+1 = next): slide the column. */
-    fun shift(dir: Int) {
+    fun set(count: Int, current: Int, animate: Boolean) {
+        val changed = count != this.count
+        this.count = count
+        // already gliding there: let it finish
+        if (!changed && anim?.isRunning == true && target == current) return
+        target = current
         anim?.cancel()
-        anim = ValueAnimator.ofFloat(dir.toFloat(), 0f).apply {
+        if (!animate || changed) { at = current.toFloat(); invalidate(); return }
+        anim = ValueAnimator.ofFloat(at, current.toFloat()).apply {
             duration = 720 // ≈360 ms at 0.5x, with the carousel's own slide
             interpolator = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
-            addUpdateListener { offset = it.animatedValue as Float; invalidate() }
+            addUpdateListener { at = it.animatedValue as Float; invalidate() }
             start()
         }
     }
 
     override fun onDraw(canvas: android.graphics.Canvas) {
+        if (count < 2) return
         val cx = width / 2f
-        val cy = height / 2f
-        for (i in -2..2) {
-            val pos = i + offset
-            val d = Math.abs(pos)
-            if (d >= 2f) continue
-            // lit and larger at the centre, faint and smaller one step away, gone beyond
-            val r = (4.5f - 1.5f * minOf(d, 1f)) * dp
-            val a = if (d <= 1f) 1f - 0.65f * d else 0.35f * (2f - d)
+        val top = height / 2f - (count - 1) * spacing / 2f
+        for (i in 0 until count) {
+            val d = Math.abs(i - at)
+            // 4.5 dp lit at the centre, shrinking with distance down to 1.5 dp
+            val r = maxOf(1.5f, 4.5f - 1.1f * d) * dp
+            val a = maxOf(0.18f, 1f - 0.6f * minOf(d, 1f) - 0.08f * maxOf(0f, d - 1f))
             paint.alpha = (a * 255).toInt()
-            canvas.drawCircle(cx, cy + pos * spacing, r, paint)
+            canvas.drawCircle(cx, top + i * spacing, r, paint)
         }
     }
 }
