@@ -44,15 +44,30 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     private var toVisible = 0f
     private var initialized = false
 
+    /*
+     * "Liquid" pill: the leading edge leaves first and fast, the trailing edge follows a beat
+     * later and lands with a tiny overshoot — the pill stretches between the two items and
+     * snaps back on the new one, like a drop.
+     */
+    private val lead = android.view.animation.PathInterpolator(0.25f, 0.9f, 0.3f, 1f)
+    private val trail = android.view.animation.PathInterpolator(0.5f, 0f, 0.25f, 1.12f)
+
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 560 // ≈280 ms with the system animation scale at 0.5x
-        interpolator = DecelerateInterpolator(1.6f)
+        duration = 680 // ≈340 ms with the system animation scale at 0.5x
+        interpolator = android.view.animation.LinearInterpolator()
         addUpdateListener {
             val t = it.animatedValue as Float
-            pill.left = fromL + (toL - fromL) * t
-            pill.right = fromR + (toR - fromR) * t
-            strength = fromStrength + (toStrength - fromStrength) * t
-            visibleAmount = fromVisible + (toVisible - fromVisible) * t
+            val movingRight = toL > fromL
+            val tl = lead.getInterpolation(t)
+            val tt = trail.getInterpolation(t)
+            pill.left = fromL + (toL - fromL) * (if (movingRight) tt else tl)
+            pill.right = fromR + (toR - fromR) * (if (movingRight) tl else tt)
+            if (pill.right - pill.left < 8 * dp) {
+                val c = (pill.left + pill.right) / 2
+                pill.left = c - 4 * dp; pill.right = c + 4 * dp
+            }
+            strength = fromStrength + (toStrength - fromStrength) * tl
+            visibleAmount = fromVisible + (toVisible - fromVisible) * tl
             updateInk()
             invalidate()
         }
@@ -160,11 +175,18 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     override fun dispatchDraw(canvas: Canvas) {
         val r = 20 * dp
         val showPill = visibleAmount > 0.01f && pill.width() > 0f
+        // appearing/disappearing: grows from (shrinks to) the item's centre, not just a fade
+        val grow = 0.55f + 0.45f * visibleAmount
+        val cx = (pill.left + pill.right) / 2
+        val half = pill.width() / 2 * grow
+        val vInset = height * (1 - grow) / 2
+        val dl = cx - half
+        val dr = cx + half
         if (showPill) {
             // faint white when only "selected", solid white when focused
             val alpha = (0x2E + (0xF2 - 0x2E) * strength) * visibleAmount
             paint.color = (alpha.toInt().coerceIn(0, 255) shl 24) or 0xFFFFFF
-            canvas.drawRoundRect(pill.left, 0f, pill.right, height.toFloat(), r, r, paint)
+            canvas.drawRoundRect(dl, vInset, dr, height - vInset, r, r, paint)
         }
         super.dispatchDraw(canvas)
         // the labels again, dark, but only inside the white pill: as it slides, each letter turns
@@ -173,10 +195,10 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         if (showPill && ink > 0.01f) {
             inkPaint.alpha = (ink * 255).toInt()
             clip.reset()
-            clip.addRoundRect(pill.left, 0f, pill.right, height.toFloat(), r, r, android.graphics.Path.Direction.CW)
+            clip.addRoundRect(dl, vInset, dr, height - vInset, r, r, android.graphics.Path.Direction.CW)
             val save = canvas.save()
             canvas.clipPath(clip)
-            canvas.saveLayer(pill.left, 0f, pill.right, height.toFloat(), inkPaint)
+            canvas.saveLayer(dl, vInset, dr, height - vInset, inkPaint)
             super.dispatchDraw(canvas)
             canvas.restoreToCount(save)
         }
