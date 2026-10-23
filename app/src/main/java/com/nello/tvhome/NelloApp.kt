@@ -12,9 +12,19 @@ import coil.memory.MemoryCache
  */
 class NelloApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        Net.init(this)
+        Thread { Net.trim() }.start()
+    }
+
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .allowRgb565(true)
         .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.12).build() }
+        // posters, backdrops and logos stay on disk: the home opens without downloading them again
+        .diskCache { coil.disk.DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(300L * 1024 * 1024).build() }
+        // images don't change at their address: use the disk copy without asking the server
+        .respectCacheHeaders(false)
         .crossfade(true)
         .build()
 

@@ -114,8 +114,69 @@ class Row(
 class HttpException(val code: Int, body: String) : Exception("HTTP $code: ${body.take(200)}")
 
 object Net {
-    suspend fun get(url: String, headers: Map<String, String> = emptyMap()): String =
-        request("GET", url, null, headers)
+    private var cacheDir: java.io.File? = null
+
+    fun init(context: android.content.Context) {
+        cacheDir = java.io.File(context.cacheDir, "http").apply { mkdirs() }
+    }
+
+    private const val MIN = 60_000L
+    private const val HOUR = 60 * MIN
+    private const val DAY = 24 * HOUR
+
+    /**
+     * How long an answer stays good, by address: catalogues and lists for hours, what never
+     * changes (ids, logos, recommendations) for days; live data (scores, sessions, Nuvio, IP,
+     * updates) is never cached.
+     */
+    private fun ttl(url: String): Long {
+        val path = url.substringBefore('?')
+        return when {
+            url.startsWith("https://api.themoviedb.org/3") -> when {
+                "/find/" in path || path.endsWith("/external_ids") -> 30 * DAY
+                path.endsWith("/recommendations") -> 2 * DAY
+                "/search/" in path -> 6 * HOUR
+                // details (logos, but also the latest episode for "new episode" badges)
+                Regex("/(movie|tv)/\\d+$").containsMatchIn(path) -> 6 * HOUR
+                else -> 3 * HOUR // trending, popular, now playing…
+            }
+            url.startsWith(BuildConfig.TOPX_BASE) -> 3 * HOUR
+            // standings and team lists change at most a few times a day
+            path.endsWith("/standings") || path.endsWith("/teams") -> 30 * MIN
+            else -> 0
+        }
+    }
+
+    private fun file(url: String): java.io.File? {
+        val dir = cacheDir ?: return null
+        val hash = java.security.MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
+        return java.io.File(dir, hash)
+    }
+
+    /**
+     * GET with a disk cache: a fresh copy is answered straight from disk (no network); an old one
+     * is used only if the network fails, so catalogues still show offline.
+     */
+    suspend fun get(url: String, headers: Map<String, String> = emptyMap()): String {
+        val ttl = ttl(url)
+        val f = if (ttl > 0) file(url) else null
+        if (f != null && f.exists() && System.currentTimeMillis() - f.lastModified() < ttl)
+            withContext(Dispatchers.IO) { runCatching { f.readText() }.getOrNull() }?.let { return it }
+        return try {
+            request("GET", url, null, headers).also { text ->
+                if (f != null) withContext(Dispatchers.IO) { runCatching { f.writeText(text) } }
+            }
+        } catch (e: Exception) {
+            if (f != null && f.exists()) withContext(Dispatchers.IO) { f.readText() } else throw e
+        }
+    }
+
+    /** Drop cached answers older than a month (called now and then). */
+    fun trim() {
+        val dir = cacheDir ?: return
+        val old = System.currentTimeMillis() - 31 * DAY
+        dir.listFiles()?.filter { it.lastModified() < old }?.forEach { it.delete() }
+    }
 
     suspend fun postJson(url: String, body: JSONObject, headers: Map<String, String> = emptyMap()): String =
         request("POST", url, body.toString(), headers + ("Content-Type" to "application/json"))

@@ -237,6 +237,8 @@ class MainActivity : ComponentActivity(), Host {
         tickLiveScores()
 
         onBackPressedDispatcher.addCallback(this) { goTop() }
+        // a new day since the launcher last ran: the first load already uses the new batch
+        rollover()
         // back where you were if the launcher was closed while you were in an app
         val resume = getSharedPreferences("where", MODE_PRIVATE)
         val recent = System.currentTimeMillis() - resume.getLong("at", 0) < 6 * 3600_000L
@@ -768,6 +770,9 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun onResume() {
         super.onResume()
+        // missed 3:00 (asleep or off): the new suggestions come now
+        dailyRefresh()
+        scheduleNightly()
         // back from Sportio: the VPN we switched on goes off again
         Sportio.wireguardDownIfOurs(this)
         // something changed in Personalizza: rebuild the home with it
@@ -1269,8 +1274,57 @@ class MainActivity : ComponentActivity(), Host {
      * Suggestions from your Nuvio history: TMDB recommendations for what you're watching and what's in
      * your library, most-recommended first, without what you already have.
      */
-    /** which batch of "Per te" is shown; bumped by the refresh button */
-    private var perTePage = 0
+    // ---------------------------------------------------------------- daily "Per te"
+    // A new batch of suggestions every day at 3:00. If the Fire TV was off or asleep then, it
+    // happens as soon as the launcher is back (the "day" of suggestions starts at 3:00).
+
+    private val perTePrefs by lazy { getSharedPreferences("perte", MODE_PRIVATE) }
+
+    /** which batch of "Per te" is shown; bumped by the refresh button and every night */
+    private var perTePage: Int
+        get() = perTePrefs.getInt("page", 0)
+        set(v) = perTePrefs.edit().putInt("page", v).apply()
+
+    private val rome = java.util.TimeZone.getTimeZone("Europe/Rome")
+
+    /** 23 October from 3:00 to 24 October 2:59 is one suggestion day */
+    private fun suggestionDay(): Long {
+        val c = java.util.Calendar.getInstance(rome)
+        c.add(java.util.Calendar.HOUR_OF_DAY, -3)
+        return c.get(java.util.Calendar.YEAR) * 1000L + c.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
+    private val nightly = Runnable { dailyRefresh() ; scheduleNightly() }
+
+    private fun scheduleNightly() {
+        val next = java.util.Calendar.getInstance(rome).apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 3); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 5)
+            if (timeInMillis <= System.currentTimeMillis()) add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+        idleHandler.removeCallbacks(nightly)
+        idleHandler.postDelayed(nightly, next.timeInMillis - System.currentTimeMillis())
+    }
+
+    /** New day of suggestions: next batch, Esplora reloaded (in the background if you're elsewhere). */
+    /** True if a new suggestion day has started (the next batch is chosen). */
+    private fun rollover(): Boolean {
+        val today = suggestionDay()
+        val last = perTePrefs.getLong("day", 0)
+        if (last == today) return false
+        perTePrefs.edit().putLong("day", today).apply()
+        if (last == 0L) return false
+        perTePage = perTePage + 1
+        return true
+    }
+
+    private fun dailyRefresh() {
+        if (!rollover()) return
+        // reload Esplora now: by morning its images are already on disk
+        states[Section.EXPLORE]?.let { it.loadedAt = 0 }
+        val state = SectionState(Section.EXPLORE, specs(Section.EXPLORE))
+        states[Section.EXPLORE] = state
+        load(state)
+    }
     private var refreshing = false
 
     /** "⟳ Altri per te": next batch of suggestions, back on the first card. */
