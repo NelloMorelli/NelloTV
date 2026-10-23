@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -303,6 +304,7 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun setupTopBar() {
         findViewById<FocusGroup>(R.id.barGroup).showSelected = false
+        setupComet()
         findViewById<GlassView>(R.id.rightBar).apply { zoomOnFocus = false; frosted = true }
         findViewById<GlassView>(R.id.dock).frosted = true
         findViewById<GlassView>(R.id.searchGlass).apply { frosted = true; zoomOnFocus = false }
@@ -325,6 +327,40 @@ class MainActivity : ComponentActivity(), Host {
                 delay(15_000)
                 network.refresh()
             }
+        }
+    }
+
+    /** Tabs ⇄ top-right menu: the selector flies across as a comet instead of vanishing/reappearing. */
+    private fun setupComet() {
+        val comet = CometView(this)
+        (findViewById<ViewGroup>(android.R.id.content)).addView(comet, ViewGroup.LayoutParams(-1, -1))
+        val tabsG = findViewById<FocusGroup>(R.id.tabGroup)
+        val barG = findViewById<FocusGroup>(R.id.barGroup)
+        val loc = IntArray(2)
+        val origin = IntArray(2)
+        fun center(v: View): android.graphics.PointF {
+            v.getLocationInWindow(loc)
+            comet.getLocationInWindow(origin)
+            return android.graphics.PointF(loc[0] - origin[0] + v.width / 2f, loc[1] - origin[1] + v.height / 2f)
+        }
+        fun inside(v: View?, g: View): Boolean {
+            var p: View? = v
+            while (p != null) {
+                if (p === g) return true
+                p = p.parent as? View
+            }
+            return false
+        }
+        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { old, new ->
+            if (old == null || new == null) return@addOnGlobalFocusChangeListener
+            val dst = when {
+                inside(old, tabsG) && inside(new, barG) -> barG
+                inside(old, barG) && inside(new, tabsG) -> tabsG
+                else -> return@addOnGlobalFocusChangeListener
+            }
+            dst.held = true
+            dst.refresh()
+            comet.fly(center(old), center(new)) { dst.release() }
         }
     }
 

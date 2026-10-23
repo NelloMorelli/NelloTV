@@ -25,6 +25,14 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
 
     var entry: (() -> View?)? = null
 
+    /** true while the comet is flying here: the pill waits and blooms when it lands ([release]) */
+    var held = false
+
+    fun release() {
+        held = false
+        retarget(animate = true)
+    }
+
     /** false: no faint pill on the selected item when the row isn't focused (text tabs) */
     var showSelected = true
 
@@ -132,7 +140,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         val target = focused ?: if (showSelected) items.firstOrNull { it.isSelected } else null
         lastTarget = target
         val newStrength = if (focused != null) 1f else 0f
-        val newVisible = if (target != null) 1f else 0f
+        val newVisible = if (target != null && !held) 1f else 0f
         val l = target?.left?.toFloat() ?: pill.left
         val r = target?.right?.toFloat() ?: pill.right
         // nothing changes in this bar (e.g. moving between cards below): don't redraw it at all
