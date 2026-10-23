@@ -1,0 +1,5 @@
+sdk.dir=/path/to/android/sdk
+tmdb.key=YOUR_TMDB_V3_KEY
+topx.base=https://topx.stremio-italia.eu/c/YOUR_CONFIG
+sports.base=https://sports.highfly.to/YOUR_CONFIG
+nuvio.key=NUVIO_PUBLIC_ANON_KEY
