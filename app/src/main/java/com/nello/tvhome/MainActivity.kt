@@ -679,8 +679,14 @@ class MainActivity : ComponentActivity(), Host {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
         if (scrollsCatalogs(current) && carousel.hasFocus() &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {
-            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0)
-                onCatalogKey(if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) -1 else 1)
+            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
+                    // ↑ always goes straight to the top menu
+                    keyHandler.removeCallbacks(pendingCatalog)
+                    pendingDir = 0
+                    tabs[current.ordinal].requestFocus()
+                } else onCatalogKey(1)
+            }
             return true
         }
         if (event.action == android.view.KeyEvent.ACTION_DOWN && isSingle(current)) {
@@ -1443,8 +1449,8 @@ class MainActivity : ComponentActivity(), Host {
 
     /** Show the chosen catalog of a single-screen tab in the carousel (only rebinds when its content changed). */
     // ---------------------------------------------------------------- vertical catalogs
-    // Film, Serie TV and TV: ↑/↓ on the carousel move to the previous/next catalog, round and round.
-    // A quick double ↑ goes to the top menu, a double ↓ to the dock.
+    // Film, Serie TV and TV: ↓ on the carousel moves to the next catalog, round and round
+    // (after the last, the first again); a quick double ↓ goes to the dock, ↑ to the top menu.
 
     private fun scrollsCatalogs(s: Section) = s == Section.MOVIES || s == Section.SERIES || s == Section.TV
 
@@ -1455,11 +1461,10 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun onCatalogKey(dir: Int) {
         if (pendingDir == dir) {
-            // second press in time: leave the carousel instead
+            // second press in time: go to the dock instead
             keyHandler.removeCallbacks(pendingCatalog)
             pendingDir = 0
-            if (dir < 0) tabs[current.ordinal].requestFocus()
-            else dockList.getChildAt(0)?.requestFocus()
+            dockList.getChildAt(0)?.requestFocus()
             return
         }
         keyHandler.removeCallbacks(pendingCatalog)
