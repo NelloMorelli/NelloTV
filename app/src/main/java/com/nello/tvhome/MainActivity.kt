@@ -1962,12 +1962,11 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     /** Sportio on the channel (even before kick-off), with WireGuard switched on first. */
-    private fun openOnSportio(channel: String, what: String) {
+    private fun openOnSportio(channel: String, @Suppress("UNUSED_PARAMETER") what: String) {
         if (!Sportio.installed(this)) { toast("Sportio non è installato"); return }
         // no WireGuard on this Fire TV: just open the channel
         val tunnel = prefs.sportVpn?.takeIf { Sportio.wireguardInstalled(this) }
         if (tunnel == null) {
-            toast("$what su $channel")
             Sportio.play(this, channel)
             return
         }
@@ -1976,9 +1975,9 @@ class MainActivity : ComponentActivity(), Host {
             toast("Consenti a Nello TV di attivare WireGuard, poi riprova")
             return
         }
-        toast("$what su $channel · attivo WireGuard…")
+        // all in the background: the VPN comes up (if it can) and the channel opens
         lifecycleScope.launch {
-            if (!Sportio.wireguardUp(this@MainActivity, tunnel)) toast("WireGuard non si è attivato, apro comunque")
+            Sportio.wireguardUp(this@MainActivity, tunnel)
             Sportio.play(this@MainActivity, channel)
         }
     }
