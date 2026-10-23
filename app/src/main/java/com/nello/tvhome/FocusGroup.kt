@@ -25,12 +25,46 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
 
     var entry: (() -> View?)? = null
 
-    /** true while the comet is flying here: the pill waits and blooms when it lands ([release]) */
-    var held = false
+    /** while a hand-off to/from the other bar is playing, normal retargeting waits */
+    private var handoff = false
 
-    fun release() {
-        held = false
-        retarget(animate = true)
+    /**
+     * The focus left for the other bar ([dir] +1 = to the right): the pill slides that way and
+     * disappears into this bar's edge, stretching like a liquid.
+     */
+    fun slideOut(dir: Int) {
+        if (pill.width() <= 0f || visibleAmount <= 0.01f) return
+        handoff = true
+        animator.cancel()
+        // squashes into a small drop against the edge it's heading to, and dissolves there
+        val edge = if (dir > 0) (buttons().lastOrNull()?.right ?: width).toFloat() else (buttons().firstOrNull()?.left ?: 0).toFloat()
+        val drop = 14 * dp
+        fromL = pill.left; fromR = pill.right
+        fromStrength = strength; fromVisible = visibleAmount
+        toL = if (dir > 0) edge - drop else edge; toR = toL + drop
+        toStrength = strength; toVisible = 0f
+        animator.start()
+    }
+
+    /** The focus arrived from the other bar: the pill comes in from this bar's edge onto [target]. */
+    fun slideIn(dir: Int, target: View, delayMs: Long) {
+        handoff = true
+        animator.cancel()
+        // born as a small drop at the edge it comes from, then stretches onto the item
+        val drop = 14 * dp
+        val edge = if (dir > 0) (buttons().firstOrNull()?.left ?: 0).toFloat() else (buttons().lastOrNull()?.right ?: width).toFloat()
+        pill.left = if (dir > 0) edge else edge - drop; pill.right = pill.left + drop
+        visibleAmount = 0f
+        strength = 1f
+        invalidate()
+        postDelayed({
+            fromL = pill.left; fromR = pill.right
+            fromStrength = 1f; fromVisible = 0f
+            toL = target.left.toFloat(); toR = target.right.toFloat()
+            toStrength = 1f; toVisible = 1f
+            lastTarget = target
+            animator.start()
+        }, delayMs)
     }
 
     /** false: no faint pill on the selected item when the row isn't focused (text tabs) */
@@ -63,6 +97,17 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 680 // ≈340 ms with the system animation scale at 0.5x
         interpolator = android.view.animation.LinearInterpolator()
+        addListener(object : android.animation.AnimatorListenerAdapter() {
+            private var cancelled = false
+            override fun onAnimationStart(a: android.animation.Animator) { cancelled = false }
+            override fun onAnimationCancel(a: android.animation.Animator) { cancelled = true }
+            override fun onAnimationEnd(a: android.animation.Animator) {
+                if (cancelled || !handoff) return
+                handoff = false
+                // settle on whatever is focused now (in case the focus moved during the hand-off)
+                retarget(animate = true)
+            }
+        })
         addUpdateListener {
             val t = it.animatedValue as Float
             val movingRight = toL > fromL
@@ -135,12 +180,13 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     private fun buttons() = (0 until childCount).map { getChildAt(it) }.filter { it.visibility == VISIBLE && it.isFocusable }
 
     private fun retarget(animate: Boolean) {
+        if (handoff) return
         val items = buttons()
         val focused = items.firstOrNull { it.hasFocus() || it.isFocused }
         val target = focused ?: if (showSelected) items.firstOrNull { it.isSelected } else null
         lastTarget = target
         val newStrength = if (focused != null) 1f else 0f
-        val newVisible = if (target != null && !held) 1f else 0f
+        val newVisible = if (target != null) 1f else 0f
         val l = target?.left?.toFloat() ?: pill.left
         val r = target?.right?.toFloat() ?: pill.right
         // nothing changes in this bar (e.g. moving between cards below): don't redraw it at all
