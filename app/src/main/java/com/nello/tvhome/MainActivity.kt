@@ -108,44 +108,11 @@ class MainActivity : ComponentActivity(), Host {
     private lateinit var catalogDots: CatalogDots
     private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
 
-    /**
-     * The clock sits in the middle of the free space between the tabs and the right menu (not the
-     * middle of the screen), and follows when the tabs change width (Cerca opening, hidden tabs).
-     */
-    private fun centerClock() {
-        val clock = findViewById<View>(R.id.clockTop)
-        val tabs = findViewById<View>(R.id.tabGroup)
-        val bar = findViewById<View>(R.id.rightBar)
-        val loc = IntArray(2)
-        val glyphs = android.graphics.Rect()
-        fun place() {
-            if (clock.width == 0 || bar.width == 0) return
-            // what the eye sees: the end of the last visible tab's text (not its padding)…
-            val last = (0 until (tabs as ViewGroup).childCount).map { tabs.getChildAt(it) }.lastOrNull { it.visibility == View.VISIBLE } as? TextView ?: return
-            last.getLocationInWindow(loc)
-            val textRight = loc[0] + last.width - last.paddingEnd -
-                ((last.width - last.paddingStart - last.paddingEnd) - last.paint.measureText(last.text.toString())) / 2f
-            // …the pill's border…
-            bar.getLocationInWindow(loc); val barLeft = loc[0]
-            // …and the digits' ink, not the text box
-            val tc = clock as TextView
-            tc.paint.getTextBounds(tc.text.toString(), 0, tc.text.length, glyphs)
-            val inkCenter = tc.paddingLeft + (glyphs.left + glyphs.right) / 2f
-            (clock.parent as View).getLocationInWindow(loc); val parentLeft = loc[0]
-            clock.translationX = (textRight + barLeft) / 2f - parentLeft - clock.left - inkCenter
-        }
-        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
-        tabs.addOnLayoutChangeListener(listener)
-        bar.addOnLayoutChangeListener(listener)
-        clock.addOnLayoutChangeListener(listener)
-    }
-
     /** Personalizza: what's on screen, card size, hidden tabs. */
     private fun applyTheme() {
         val dp = resources.displayMetrics.density
         carousel.layoutParams = carousel.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
         catalogDots.layoutParams = catalogDots.layoutParams.apply { height = (234 * dp * Theme.cardScale).toInt() }
-        findViewById<View>(R.id.clockTop).visibility = if (Theme.showClock) View.VISIBLE else View.INVISIBLE
         val hidden = Customize.hiddenTabs(this)
         tabs.forEachIndexed { i, t -> t.visibility = if (Section.entries[i].name in hidden) View.GONE else View.VISIBLE }
     }
@@ -262,7 +229,6 @@ class MainActivity : ComponentActivity(), Host {
 
         setupTabs()
         applyTheme()
-        centerClock()
         setupSearch()
         setupTopBar()
         applyPrefs()

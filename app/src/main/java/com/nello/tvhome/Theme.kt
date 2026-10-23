@@ -20,7 +20,6 @@ object Theme {
     var dim = 0f
     /** carousel card size multiplier */
     var cardScale = 1f
-    var showClock = true
     var showDock = true
     var showCardInfo = true
     var roundness = 1f
@@ -49,7 +48,6 @@ object Theme {
         glass = p.getInt("glass", 1)
         dim = p.getFloat("dim", 0f)
         cardScale = p.getFloat("cardScale", 1f)
-        showClock = p.getBoolean("showClock", true)
         showDock = p.getBoolean("showDock", true)
         showCardInfo = p.getBoolean("showCardInfo", true)
         roundness = p.getFloat("roundness", 1f)

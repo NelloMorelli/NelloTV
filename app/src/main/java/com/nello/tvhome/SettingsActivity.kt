@@ -433,7 +433,6 @@ class SettingsActivity : ComponentActivity() {
             choose(it, "Scheda iniziale", LauncherPrefs.TABS, prefs.startTab) { v -> prefs.startTab = v }
         }
         header("Sullo schermo")
-        toggle("Orologio in alto", "showClock", Theme.showClock)
         toggle("Dock", "showDock", Theme.showDock)
         toggle("Titolo e info sotto le card", "showCardInfo", Theme.showCardInfo)
         header("Schede")

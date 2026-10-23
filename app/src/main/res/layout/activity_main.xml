@@ -88,19 +88,6 @@
                 </com.nello.tvhome.FocusGroup>
             </LinearLayout>
 
-            <TextClock
-                android:id="@+id/clockTop"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:fontFamily="@font/poppins_medium"
-                android:format12Hour="HH:mm"
-                android:format24Hour="HH:mm"
-                android:shadowColor="#99000000"
-                android:shadowRadius="8"
-                android:textColor="@color/text"
-                android:textSize="28sp" />
-
             <!-- right menu: one glass pill, a white highlight slides between the icons -->
             <com.nello.tvhome.GlassView
                 android:id="@+id/rightBar"
