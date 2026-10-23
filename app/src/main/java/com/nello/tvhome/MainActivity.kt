@@ -502,12 +502,20 @@ class MainActivity : ComponentActivity(), Host {
         p.showUnder(findViewById(R.id.vpnButton))
     }
 
-    /** ⚙: just the two ways in — the launcher's settings and the Fire TV's own. */
+    /**
+     * ⚙: the launcher's state up top (version, whether it's up to date), then the two ways in —
+     * the launcher's own settings and the Fire TV's.
+     */
     private fun showSettingsPopup() {
         val p = popup()
-        p.hero("Impostazioni", "Nello TV · versione ${BuildConfig.VERSION_CODE}")
-        p.button("Nello TV") { openSettings() }
-        p.button("Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        val status = p.hero("Nello TV", "Versione ${BuildConfig.VERSION_CODE} · controllo aggiornamenti…")
+        p.button("Impostazioni del launcher") { openSettings() }
+        p.button("Impostazioni della Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
+        val job = lifecycleScope.launch {
+            val r = if (Updater.configured) runCatching { Updater.check() }.getOrNull() else null
+            status.text = "Versione ${BuildConfig.VERSION_CODE} · " + (r?.let { "disponibile la ${it.version}" } ?: "aggiornato")
+        }
+        p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.settingsButton))
     }
 
