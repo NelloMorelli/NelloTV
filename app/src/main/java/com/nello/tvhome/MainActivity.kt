@@ -682,14 +682,9 @@ class MainActivity : ComponentActivity(), Host {
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
         if (scrollsCatalogs(current) && carousel.hasFocus() &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {
-            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) {
-                    // ↑ always goes straight to the top menu
-                    keyHandler.removeCallbacks(pendingCatalog)
-                    pendingDir = 0
-                    tabs[current.ordinal].requestFocus()
-                } else onCatalogKey(1)
-            }
+            // holding the key runs through the catalogues (one per slide), never past the edges
+            if (event.action == android.view.KeyEvent.ACTION_DOWN)
+                onCatalogKey(if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP) -1 else 1, held = event.repeatCount > 0)
             return true
         }
         if (event.action == android.view.KeyEvent.ACTION_DOWN && isSingle(current)) {
@@ -1464,28 +1459,26 @@ class MainActivity : ComponentActivity(), Host {
 
     /** Show the chosen catalog of a single-screen tab in the carousel (only rebinds when its content changed). */
     // ---------------------------------------------------------------- vertical catalogs
-    // Film, Serie TV and TV: ↓ on the carousel moves to the next catalog, round and round
-    // (after the last, the first again); a quick double ↓ goes to the dock, ↑ to the top menu.
+    // Film, Serie TV and TV: the catalogues are a vertical list. ↑/↓ move to the previous/next one;
+    // ↑ on the first goes up to the top menu, ↓ on the last down to the dock. Back: top menu.
 
     private fun scrollsCatalogs(s: Section) = s == Section.MOVIES || s == Section.SERIES || s == Section.TV
 
-    private var pendingDir = 0
-    private val pendingCatalog = Runnable { val d = pendingDir; pendingDir = 0; cycleCatalog(d) }
-    private val keyHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var catalogAnimating = false
     private var dotsAnimate = false
 
-    private fun onCatalogKey(dir: Int) {
-        if (pendingDir == dir) {
-            // second press in time: go to the dock instead
-            keyHandler.removeCallbacks(pendingCatalog)
-            pendingDir = 0
-            dockList.getChildAt(0)?.requestFocus()
-            return
+    private fun onCatalogKey(dir: Int, held: Boolean) {
+        val state = states[current] ?: return
+        val list = scrollable(state)
+        val at = list.indexOf(catalogIndex[current] ?: 0).coerceAtLeast(0)
+        val next = at + dir
+        when {
+            next in list.indices -> cycleCatalog(dir)
+            // past the edges: leave the list (not while holding, so a held key stops at the end)
+            held -> {}
+            dir < 0 -> tabs[current.ordinal].requestFocus()
+            else -> dockList.getChildAt(0)?.requestFocus()
         }
-        keyHandler.removeCallbacks(pendingCatalog)
-        pendingDir = dir
-        keyHandler.postDelayed(pendingCatalog, 260)
     }
 
     /** Catalogs you can scroll to: loaded and not empty. */
@@ -1497,7 +1490,7 @@ class MainActivity : ComponentActivity(), Host {
         val list = scrollable(state)
         if (list.size < 2 || catalogAnimating) return
         val at = list.indexOf(catalogIndex[current] ?: 0).coerceAtLeast(0)
-        val next = list[Math.floorMod(at + dir, list.size)]
+        val next = list.getOrNull(at + dir) ?: return
         val d = 48 * resources.displayMetrics.density
         val views = listOf(catalogLabel, carousel, carouselTitle, carouselMeta)
         val out = android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f)
