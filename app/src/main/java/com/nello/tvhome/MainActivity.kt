@@ -312,7 +312,7 @@ class MainActivity : ComponentActivity(), Host {
         findViewById<StatusIcon>(R.id.gearIcon).kind = StatusIcon.Kind.GEAR
         findViewById<StatusIcon>(R.id.vpnIcon).kind = StatusIcon.Kind.VPN
         findViewById<View>(R.id.settingsButton).setOnClickListener { showSettingsPopup() }
-        findViewById<StatusIcon>(R.id.btIcon).kind = StatusIcon.Kind.HEADPHONES
+        findViewById<StatusIcon>(R.id.btIcon).kind = StatusIcon.Kind.SPEAKER
         findViewById<View>(R.id.btButton).setOnClickListener { showHeadphonesPopup() }
         // headphones icon follows the connection
         registerReceiver(object : android.content.BroadcastReceiver() {
@@ -422,38 +422,34 @@ class MainActivity : ComponentActivity(), Host {
         p.showUnder(findViewById(R.id.netButton))
     }
 
+    /** 🔊 when the sound is on the TV, 🎧 when it's on headphones. */
     private fun updateHeadphonesIcon() {
-        findViewById<StatusIcon>(R.id.btIcon).level = if (BluetoothAudio.connected() != null) 1 else 0
+        val on = BluetoothAudio.connected() != null
+        findViewById<StatusIcon>(R.id.btIcon).apply {
+            kind = if (on) StatusIcon.Kind.HEADPHONES else StatusIcon.Kind.SPEAKER
+            level = if (on) 1 else 0
+        }
     }
 
-    /** 🎧: paired headphones with one-click connect/disconnect, plus "Cerca nuove cuffie". */
+    /** 🔊 Audio: where the sound goes — the TV (HDMI) or one of the paired headphones. */
     @android.annotation.SuppressLint("MissingPermission")
     private fun showHeadphonesPopup() {
         BluetoothAudio.withA2dp(this) {
             val now = BluetoothAudio.connected()
-            val p = popup().title(
-                "Cuffie",
-                now?.let { d -> "Audio su ${BluetoothAudio.pretty(d)}" + (BluetoothAudio.codec(d)?.let { " · $it" } ?: "") }
-                    ?: "Audio sulla TV",
-            )
-            val paired = BluetoothAudio.pairedAudio()
-            if (paired.isEmpty()) p.text("Nessuna cuffia associata.")
-            paired.forEach { d ->
-                val on = d == now
-                p.button(if (on) "✓  ${BluetoothAudio.pretty(d)} · Scollega" else BluetoothAudio.pretty(d)) {
-                    if (on) {
-                        BluetoothAudio.disconnect(d)
-                        toast("Audio di nuovo sulla TV")
-                    } else {
-                        // the headphones must be switched on (out of the case)
-                        if (BluetoothAudio.connect(d)) toast("Collego ${BluetoothAudio.pretty(d)}… accendile se sono spente")
-                        else toast("Impossibile collegare ${BluetoothAudio.pretty(d)}")
-                    }
+            val p = popup().title("Audio", now?.let { "Esce da ${BluetoothAudio.pretty(it)}" } ?: "Esce dalla TV")
+            p.button(if (now == null) "✓  TV" else "TV") {
+                now?.let { d -> BluetoothAudio.disconnect(d); toast("Audio di nuovo sulla TV") }
+            }
+            BluetoothAudio.pairedAudio().forEach { d ->
+                p.button(if (d == now) "✓  ${BluetoothAudio.pretty(d)}" else BluetoothAudio.pretty(d)) {
+                    if (d == now) return@button
+                    if (BluetoothAudio.connect(d)) toast("Collego ${BluetoothAudio.pretty(d)}… accendile se sono spente")
+                    else toast("Impossibile collegare ${BluetoothAudio.pretty(d)}")
                 }
             }
             p.gap()
             p.button("＋  Cerca nuove cuffie") { startActivity(Intent(this, BluetoothActivity::class.java)) }
-            p.button("Impostazioni Bluetooth") { runCatching { startActivity(Intent("android.settings.CONTROLLERS_SETTINGS")) } }
+            p.button("Impostazioni audio") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
             p.showUnder(findViewById(R.id.btButton))
         }
     }

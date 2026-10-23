@@ -11,7 +11,7 @@ import android.view.View
 /** Small top-bar glyphs drawn in code: Wi-Fi with signal bars, Ethernet, offline, VPN shield, gear. */
 class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
-    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, MIC, HEADPHONES }
+    enum class Kind { WIFI, ETHERNET, OFFLINE, VPN, GEAR, MIC, HEADPHONES, SPEAKER }
 
     var kind = Kind.WIFI
         set(value) { field = value; invalidate() }
@@ -53,6 +53,7 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             Kind.GEAR -> drawGear(canvas, s, cx, cy)
             Kind.MIC -> drawMic(canvas, s, cx, cy)
             Kind.HEADPHONES -> drawHeadphones(canvas, s, cx, cy)
+            Kind.SPEAKER -> drawSpeaker(canvas, s, cx, cy)
         }
     }
 
@@ -158,6 +159,26 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             rect.set(x - s * 0.11f, cy - s * 0.02f, x + s * 0.11f, cy + s * 0.40f)
             if (connected) canvas.drawRoundRect(rect, s * 0.08f, s * 0.08f, fill)
             else canvas.drawRoundRect(rect, s * 0.08f, s * 0.08f, stroke)
+        }
+    }
+    /** Speaker with two sound waves. */
+    private fun drawSpeaker(canvas: Canvas, s: Float, cx: Float, cy: Float) {
+        fill.color = on
+        path.reset()
+        path.moveTo(cx - s * 0.42f, cy - s * 0.14f)
+        path.lineTo(cx - s * 0.24f, cy - s * 0.14f)
+        path.lineTo(cx - s * 0.02f, cy - s * 0.36f)
+        path.lineTo(cx - s * 0.02f, cy + s * 0.36f)
+        path.lineTo(cx - s * 0.24f, cy + s * 0.14f)
+        path.lineTo(cx - s * 0.42f, cy + s * 0.14f)
+        path.close()
+        path.fillType = Path.FillType.WINDING
+        canvas.drawPath(path, fill)
+        stroke.color = on
+        stroke.strokeWidth = s * 0.08f
+        for (r in listOf(0.2f, 0.36f)) {
+            rect.set(cx - s * r, cy - s * r, cx + s * r, cy + s * r)
+            canvas.drawArc(rect, -45f, 90f, false, stroke)
         }
     }
 }
