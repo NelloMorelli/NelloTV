@@ -33,6 +33,8 @@ data class TvShow(
     val start: Long,
     val stop: Long,
     val category: String?,
+    /** the programme's own image from the guide (RaiPlay, Mediaset, Sky), if any */
+    val image: String? = null,
 ) {
     val isOn get() = System.currentTimeMillis() in start until stop
     val progress get() = ((System.currentTimeMillis() - start).toFloat() / (stop - start)).coerceIn(0f, 1f)
@@ -140,27 +142,30 @@ object TvGuide {
             p.setInput(input, "UTF-8")
             var ch: TvChannel? = null
             var start = 0L; var stop = 0L
-            var title: String? = null; var cat: String? = null
+            var title: String? = null; var cat: String? = null; var image: String? = null
             var channelId: String? = null
             while (p.next() != XmlPullParser.END_DOCUMENT) {
                 if (p.eventType == XmlPullParser.START_TAG) when (p.name) {
                     "channel" -> channelId = p.getAttributeValue(null, "id")
-                    "icon" -> if (channelId != null && channelId in byId && channelId !in logos)
-                        p.getAttributeValue(null, "src")?.let { logos[channelId!!] = it }
+                    "icon" -> when {
+                        ch != null -> if (image == null) image = p.getAttributeValue(null, "src")
+                        channelId != null && channelId in byId && channelId !in logos ->
+                            p.getAttributeValue(null, "src")?.let { logos[channelId!!] = it }
+                    }
                     "programme" -> {
                         channelId = null
                         ch = byId[p.getAttributeValue(null, "channel")]
                         if (ch != null) {
                             start = runCatching { fmt.parse(p.getAttributeValue(null, "start"))!!.time }.getOrDefault(0)
                             stop = runCatching { fmt.parse(p.getAttributeValue(null, "stop"))!!.time }.getOrDefault(0)
-                            title = null; cat = null
+                            title = null; cat = null; image = null
                         }
                     }
                     "title" -> if (ch != null && title == null) title = p.nextText()
                     "category" -> if (ch != null && cat == null) cat = p.nextText()
                 } else if (p.eventType == XmlPullParser.END_TAG && p.name == "programme") {
                     val c = ch
-                    if (c != null && title != null && stop > now && start < until) out += TvShow(c, title!!, start, stop, cat)
+                    if (c != null && title != null && stop > now && start < until) out += TvShow(c, title!!, start, stop, cat, image)
                     ch = null
                 }
             }

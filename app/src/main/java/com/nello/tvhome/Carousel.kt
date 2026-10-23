@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.recyclerview.widget.RecyclerView
 import coil.dispose
+import coil.imageLoader
 import coil.load
 import kotlinx.coroutines.launch
 
@@ -254,6 +255,8 @@ class CarouselAdapter(
         // TV card: programme image (TMDB, if it's a film/series) or a dark gradient, the channel
         // logo at the top left, title, time and progress at the bottom
         private lateinit var tvArt: ImageView
+        private lateinit var tvBigLogo: ImageView
+        private lateinit var tvPoster: ImageView
         private lateinit var tvLogo: ImageView
         private lateinit var tvChannel: TextView
         private lateinit var tvTitle: TextView
@@ -266,6 +269,12 @@ class CarouselAdapter(
                 background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF2A2A30.toInt(), 0xFF101014.toInt()))
                 tvArt = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
                 addView(tvArt, FrameLayout.LayoutParams(-1, -1))
+                // nothing to show: the channel's logo, large
+                tvBigLogo = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER; alpha = 0.9f }
+                addView(tvBigLogo, FrameLayout.LayoutParams(px(150), px(90), Gravity.CENTER).apply { bottomMargin = px(30) })
+                // portrait Sky covers: the poster on the right, over a blurred copy of itself
+                tvPoster = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_END }
+                addView(tvPoster, FrameLayout.LayoutParams(-1, -1))
                 addView(View(ctx).apply { setBackgroundResource(R.drawable.card_gradient) }, FrameLayout.LayoutParams(-1, px(130), Gravity.BOTTOM))
                 val head = LinearLayout(ctx).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -492,6 +501,38 @@ class CarouselAdapter(
             card.setOnClickListener { host.onRaceClicked(r) }
         }
 
+        /**
+         * The programme's picture: a landscape image from the guide as it is; otherwise TMDB's
+         * backdrop; otherwise the guide's portrait cover over a blurred copy of itself; otherwise
+         * the channel logo.
+         */
+        private suspend fun tvImage(t: TvShow) {
+            val guide = t.image?.let { url ->
+                val r = ctx.imageLoader.execute(coil.request.ImageRequest.Builder(ctx).data(url).allowHardware(false).build())
+                (r.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.takeIf { it.width >= 250 }
+            }
+            if (guide != null && guide.width >= guide.height) { fadeIn(tvArt) { tvArt.setImageBitmap(guide) }; return }
+            Tmdb.backdropForTitle(t.title)?.let { tvArt.load(it) { crossfade(true) }; return }
+            if (guide != null) {
+                // a tiny copy scaled back up is a cheap blur
+                val small = android.graphics.Bitmap.createScaledBitmap(guide, 12, (12f * guide.height / guide.width).toInt().coerceAtLeast(1), true)
+                fadeIn(tvArt) {
+                    tvArt.setImageBitmap(small)
+                    tvArt.colorFilter = android.graphics.PorterDuffColorFilter(0x66000000, android.graphics.PorterDuff.Mode.SRC_ATOP)
+                    tvPoster.setImageBitmap(guide)
+                }
+                return
+            }
+            t.channel.logo?.let { tvBigLogo.load(it) { crossfade(true) } }
+        }
+
+        private fun fadeIn(v: View, set: () -> Unit) {
+            set()
+            v.alpha = 0f
+            v.animate().alpha(1f).setDuration(400).start()
+            if (tvPoster.drawable != null) { tvPoster.alpha = 0f; tvPoster.animate().alpha(1f).setDuration(400).start() }
+        }
+
         fun bindTv(t: TvShow) {
             tvView
             tvChannel.text = t.channel.name
@@ -508,7 +549,10 @@ class CarouselAdapter(
             tvJob?.cancel()
             tvArt.dispose()
             tvArt.setImageDrawable(null)
-            tvJob = scope.launch { Tmdb.backdropForTitle(t.title)?.let { tvArt.load(it) { crossfade(true) } } }
+            tvArt.colorFilter = null
+            tvPoster.setImageDrawable(null)
+            tvBigLogo.setImageDrawable(null)
+            tvJob = scope.launch { tvImage(t) }
             card.contentDescription = "${t.channel.name}: ${t.title}"
             card.setOnClickListener { host.onTvClicked(t) }
         }

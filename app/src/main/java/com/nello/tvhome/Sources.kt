@@ -103,6 +103,16 @@ object Tmdb {
 
     /** A backdrop for a TV programme title (film or series), if TMDB recognises it. Cached. */
     suspend fun backdropForTitle(title: String): String? {
+        // "Mio fratello è un vichingo - The Last Viking", "Champions League Remix Ep.3 23/10/2026"…:
+        // the full title first, then without what comes after " - ", episode numbers, dates
+        val clean = title.replace(Regex("""\s*(\(.*?\)|Ep\.?\s*\d+.*|\d{1,2}/\d{1,2}/\d{2,4}.*|-\s*Stagione.*|- 1ª TV.*)$""", RegexOption.IGNORE_CASE), "").trim()
+        val candidates = listOf(title, clean, clean.substringBefore(" - ").trim(), clean.substringAfter(" - ", "").trim())
+            .filter { it.length >= 3 }.distinct()
+        for (c in candidates) exactBackdrop(c)?.let { return it }
+        return null
+    }
+
+    private suspend fun exactBackdrop(title: String): String? {
         val key = title.lowercase().trim()
         if (titleArt.containsKey(key)) return titleArt[key]
         val q = java.net.URLEncoder.encode(title, "UTF-8")
