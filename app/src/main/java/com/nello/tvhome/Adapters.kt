@@ -282,6 +282,8 @@ class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.
 
         h.badge.visibility = if (item.badge != null) View.VISIBLE else View.GONE
         h.badge.text = item.badge
+        // "Nuovo" in red, like a notification
+        h.badge.setBackgroundResource(if (item.newEpisode) R.drawable.live_bg else R.drawable.badge_bg)
 
         val p = item.progress
         if (p != null) {

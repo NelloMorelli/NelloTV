@@ -395,6 +395,12 @@ class MainActivity : ComponentActivity(), Host {
     private fun showSettingsPopup() {
         val p = popup().title("Impostazioni")
         p.button("Sfondo: " + LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) { chooseWallpaper() }
+        lateinit var nightButton: TextView
+        nightButton = p.button("Modalità notte: " + if (prefs.night) "attiva" else "spenta", keepOpen = true) {
+            prefs.night = !prefs.night
+            nightButton.text = "Modalità notte: " + if (prefs.night) "attiva" else "spenta"
+            applyPrefs()
+        }
         p.button("Rete e Wi-Fi") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } }
         p.button("Telecomandi e Bluetooth") { runCatching { startActivity(Intent("android.settings.CONTROLLERS_SETTINGS")) } }
         p.gap()
@@ -422,7 +428,8 @@ class MainActivity : ComponentActivity(), Host {
 
     /** Wallpaper from the settings screen. */
     private fun applyPrefs() {
-        val key = prefs.wallpaper + (if (prefs.wallpaper == "custom") prefs.customVersion.toString() else "")
+        GlassView.night = prefs.night
+        val key = prefs.wallpaper + (if (prefs.wallpaper == "custom") prefs.customVersion.toString() else "") + (if (prefs.night) ":night" else "")
         if (key == appliedWallpaper) return
         appliedWallpaper = key
         lifecycleScope.launch {
@@ -476,6 +483,8 @@ class MainActivity : ComponentActivity(), Host {
         paint.shader = android.graphics.LinearGradient(0f, h.toFloat(), 0f, h - bottom,
             intArrayOf(0xE6000000.toInt(), 0x66000000, 0x00000000), floatArrayOf(0f, 0.5f, 1f), android.graphics.Shader.TileMode.CLAMP)
         c.drawRect(0f, h - bottom, w.toFloat(), h.toFloat(), paint)
+        // night mode: the whole background much darker
+        if (prefs.night) c.drawColor(0xB3000000.toInt())
         return out
     }
 
@@ -940,6 +949,9 @@ class MainActivity : ComponentActivity(), Host {
         val seeds = (watching + library).filter { it.tmdbId != null }.distinctBy { it.type to it.tmdbId }.take(10)
         val owned = (watching + library).mapNotNull { it.tmdbId }.toSet()
         val lists = seeds.map { s -> async { runCatching { Tmdb.recommendations(s.type, s.tmdbId!!) }.getOrElse { emptyList() }.take(20) } }.awaitAll()
+        // why: the title of yours that recommends it most strongly
+        val because = HashMap<Pair<String, Int>, Pair<String, Double>>()
+        val inProgress = watching.mapNotNull { it.tmdbId }.toSet()
         // score: how many of your titles recommend it, then how high
         val score = HashMap<Pair<String, Int>, Double>()
         val byKey = HashMap<Pair<String, Int>, MediaItem>()
@@ -948,11 +960,17 @@ class MainActivity : ComponentActivity(), Host {
                 val id = m.tmdbId ?: return@forEachIndexed
                 if (id in owned) return@forEachIndexed
                 val k = m.type to id
-                score[k] = (score[k] ?: 0.0) + 1.0 + (10 - rank) / 20.0
+                val w = 1.0 + (10 - rank) / 20.0
+                score[k] = (score[k] ?: 0.0) + w
                 byKey[k] = m
+                val seed = seeds[lists.indexOf(l)]
+                if (w > (because[k]?.second ?: -1.0)) {
+                    val verb = if (seed.tmdbId in inProgress) "stai guardando" else "hai in libreria"
+                    because[k] = "Perché $verb ${seed.title}" to w
+                }
             }
         }
-        score.entries.sortedByDescending { it.value }.mapNotNull { byKey[it.key] }.take(80)
+        score.entries.sortedByDescending { it.value }.mapNotNull { e -> byKey[e.key]?.copy(reason = because[e.key]?.first) }.take(80)
     }
 
     // ---------------------------------------------------------------- Esplora: below the dock
@@ -1297,6 +1315,7 @@ class MainActivity : ComponentActivity(), Host {
             item.rating?.let { "★ $it" },
             item.badge,
             item.progress?.let { "${(it * 100).toInt()}% visto" },
+            item.reason,
         ).joinToString(" · "))
     }
 

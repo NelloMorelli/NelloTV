@@ -16,6 +16,10 @@ class LauncherPrefs(context: Context) {
         get() = p.getString("wallpaper", "original")!!
         set(v) = p.edit().putString("wallpaper", v).apply()
 
+    var night: Boolean
+        get() = p.getBoolean("night", false)
+        set(v) = p.edit().putBoolean("night", v).apply()
+
     /** bumped every time a new local image is chosen, so the home screen reloads it */
     var customVersion: Long
         get() = p.getLong("customVersion", 0)
@@ -86,6 +90,10 @@ class SettingsActivity : GlassPage() {
             choose(it, "Sfondo", options, prefs.wallpaper) { v ->
                 if (v == "pick") startActivity(Intent(this, WallpaperPickerActivity::class.java)) else prefs.wallpaper = v
             }
+        }
+        row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") {
+            prefs.night = !prefs.night
+            build()
         }
         row("Dock", "${apps.get(apps.dock()).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it) }
         row("Dock Sport", "${apps.get(apps.dock(true)).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it, sport = true) }

@@ -17,6 +17,9 @@ import android.widget.FrameLayout
 class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : FrameLayout(context, attrs) {
 
     companion object {
+        /** night mode: dimmer glass everywhere */
+        var night = false
+
         var blurred: Bitmap? = null
 
         /** Downscale + 3 box-blur passes: cheap and close enough to a gaussian at TV viewing distance. */
@@ -105,10 +108,12 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
             canvas.drawRoundRect(rect, r, r, glassPaint)
         }
         if (frosted) {
-            if (frostHeight != height) {
-                frostHeight = height
+            val key = if (night) -height else height
+            if (frostHeight != key) {
+                frostHeight = key
                 frostPaint.shader = android.graphics.LinearGradient(0f, 0f, 0f, height.toFloat(),
-                    intArrayOf(0x47FFFFFF, 0x24FFFFFF, 0x14FFFFFF), floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+                    if (night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else intArrayOf(0x47FFFFFF, 0x24FFFFFF, 0x14FFFFFF),
+                    floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
             }
             canvas.drawRoundRect(rect, r, r, frostPaint)
         } else {

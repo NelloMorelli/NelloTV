@@ -23,6 +23,10 @@ data class MediaItem(
     val image: String? = null,
     /** vertical 2:3 poster, for the collapsed cards of the carousel */
     val poster: String? = null,
+    /** "Per te": why it's suggested, e.g. "Perché hai visto Casino Royale" */
+    val reason: String? = null,
+    /** Continua a guardare: a newer episode than yours is out */
+    val newEpisode: Boolean = false,
     /** position in a Top 10, drawn big on the card */
     val rank: Int? = null,
     val backdrop: String? = null,

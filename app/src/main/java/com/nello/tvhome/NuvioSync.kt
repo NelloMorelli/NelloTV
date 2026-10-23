@@ -100,7 +100,9 @@ class NuvioSync(context: Context) {
             .sortedByDescending { it.optLong("last_watched") }
             .distinctBy { contentId(it) }
             .take(15)
+        // series with a new episode first
         entries.map { e -> async { runCatching { progressItem(e) }.getOrNull() } }.awaitAll().filterNotNull()
+            .sortedByDescending { it.newEpisode }
     }
 
     suspend fun library(): List<MediaItem> = coroutineScope {
@@ -124,7 +126,19 @@ class NuvioSync(context: Context) {
         val tmdb = Tmdb.findByImdb(id, type)
         val season = e.optInt("season", 0)
         val episode = e.optInt("episode", 0)
-        val badge = if (type == "series" && season > 0) "S$season E$episode" else null
+        // a newer episode than the one you're on came out in the last 14 days
+        val last = tmdb?.optJSONObject("last_episode_to_air")
+        val lastS = last?.optInt("season_number") ?: 0
+        val lastE = last?.optInt("episode_number") ?: 0
+        val aired = last?.str("air_date")?.let { runCatching { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(it)!!.time }.getOrNull() }
+        val isNew = type == "series" && season > 0 && aired != null &&
+            System.currentTimeMillis() - aired < 14 * 86_400_000L &&
+            (lastS > season || (lastS == season && lastE > episode))
+        val badge = when {
+            isNew -> "Nuovo · S$lastS E$lastE"
+            type == "series" && season > 0 -> "S$season E$episode"
+            else -> null
+        }
         val left = ((e.optDouble("duration") - e.optDouble("position")) / 60_000).toInt()
         return MediaItem(
             title = tmdb?.let { it.str("title") ?: it.str("name") } ?: e.str("name") ?: id,
@@ -142,6 +156,7 @@ class NuvioSync(context: Context) {
             videoId = e.str("video_id") ?: id,
             season = season.takeIf { it > 0 },
             episode = episode.takeIf { it > 0 },
+            newEpisode = isNew,
         )
     }
 
