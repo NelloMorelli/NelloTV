@@ -97,7 +97,7 @@ class SettingsActivity : GlassPage() {
             finish()
         }
         row("Notifiche", "Napoli · Ferrari · nuovi episodi") {
-            val p = popup().title("Notifiche", "Banner sopra qualsiasi app: Napoli e Ferrari 10 minuti prima, nuovi episodi delle serie che segui. Premi ☰ per aprire.")
+            val p = popup().title("Notifiche", "Banner sopra qualsiasi app: Napoli e Ferrari 10 minuti prima, nuovi episodi delle serie che segui.")
             p.button("Prova notifica") {
                 // open Nello TV's home behind it so the banner shows over the usual screen
                 finish()

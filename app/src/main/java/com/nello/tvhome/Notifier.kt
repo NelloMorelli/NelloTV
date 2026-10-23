@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
 /**
  * Banners over any app, shown by the always-on accessibility service:
  * Napoli 10 minutes before kick-off, Ferrari's qualifying/sprint/race 10 minutes before,
- * and new episodes of series you're watching in Nuvio. ☰ while a banner is up opens it.
+ * and new episodes of series you're watching in Nuvio. Information only: no remote keys are
+ * intercepted (filtering keys made every press on the TV wait for the launcher).
  */
 class Notifier(private val service: AccessibilityService) {
 
@@ -155,7 +156,7 @@ class Notifier(private val service: AccessibilityService) {
                 maxLines = 2
             })
             addView(TextView(service).apply {
-                this.text = "Premi ☰ per aprire"
+                this.text = "Lo trovi in Nello TV"
                 textSize = 12f
                 setTextColor(0x99FFFFFF.toInt())
                 setPadding(0, dp(4), 0, 0)
