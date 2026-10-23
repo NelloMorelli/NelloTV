@@ -418,10 +418,8 @@ class MainActivity : ComponentActivity(), Host {
         val p = popup()
         val signal = details["Segnale"]?.substringBefore(" (")
         val ping = p.hero(
-            when { !st.online -> StatusIcon.Kind.OFFLINE; st.ethernet -> StatusIcon.Kind.ETHERNET; else -> StatusIcon.Kind.WIFI },
             when { !st.online -> "Offline"; st.ethernet -> "Ethernet"; else -> details["Rete"] ?: "Wi-Fi" },
             if (st.online) listOfNotNull("Connesso", signal).joinToString(" · ") else "Nessuna connessione a Internet",
-            active = st.online,
         )
         val pingBase = ping.text
         // device status
@@ -452,8 +450,7 @@ class MainActivity : ComponentActivity(), Host {
         BluetoothAudio.withA2dp(this) {
             val now = BluetoothAudio.connected()
             val p = popup()
-            p.hero(if (now != null) StatusIcon.Kind.HEADPHONES else StatusIcon.Kind.SPEAKER,
-                now?.let { BluetoothAudio.pretty(it) } ?: "TV", "L'audio esce da qui", level = if (now != null) 1 else 0)
+            p.hero(now?.let { BluetoothAudio.pretty(it) } ?: "TV", "L'audio esce da qui")
             p.button(if (now == null) "✓  TV" else "TV") {
                 now?.let { d -> BluetoothAudio.disconnect(d); toast("Audio di nuovo sulla TV") }
             }
@@ -478,8 +475,7 @@ class MainActivity : ComponentActivity(), Host {
         val installed = installedVpns()
         val chosen = installed.firstOrNull { it.first == prefs.vpnPackage }
         val p = popup()
-        val ip = p.hero(StatusIcon.Kind.VPN, if (vpn) "Protetto" else "Non protetto",
-            chosen?.second ?: "Nessuna app VPN scelta", level = if (vpn) 1 else 0, active = vpn)
+        val ip = p.hero(if (vpn) "Protetto" else "Non protetto", chosen?.second ?: "Nessuna app VPN scelta")
         val ipBase = ip.text
         when {
             installed.isEmpty() -> p.text("Nessuna app VPN installata.")
@@ -509,7 +505,7 @@ class MainActivity : ComponentActivity(), Host {
     /** ⚙: just the two ways in — the launcher's settings and the Fire TV's own. */
     private fun showSettingsPopup() {
         val p = popup()
-        p.hero(StatusIcon.Kind.GEAR, "Impostazioni", "Nello TV · versione ${BuildConfig.VERSION_CODE}")
+        p.hero("Impostazioni", "Nello TV · versione ${BuildConfig.VERSION_CODE}")
         p.button("Nello TV") { openSettings() }
         p.button("Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
         p.showUnder(findViewById(R.id.settingsButton))

@@ -73,26 +73,15 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     }
 
     /**
-     * The pop-up's reason to be there: what that button is about right now, at a glance —
-     * a round glass bubble with its icon, the state in big, a detail underneath.
+     * The pop-up's reason to be there: what that button is about right now, at a glance — the
+     * state in big, a detail underneath (the button it came out of already says what it is).
      * Returns the detail line, to fill in later (ping, IP…).
      */
-    fun hero(kind: StatusIcon.Kind, state: String, detail: String, level: Int = 3, active: Boolean = true): TextView {
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(px(4), px(2), px(4), px(10))
+    fun hero(state: String, detail: String): TextView {
+        val col = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(6), px(2), px(6), px(10))
         }
-        val bubble = android.widget.FrameLayout(context).apply {
-            background = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(if (active) 0x33FFFFFF else 0x14FFFFFF)
-                setStroke(px(1), 0x40FFFFFF)
-            }
-            addView(StatusIcon(context).apply { this.kind = kind; this.level = level }, android.widget.FrameLayout.LayoutParams(px(24), px(24), Gravity.CENTER))
-        }
-        row.addView(bubble, LinearLayout.LayoutParams(px(44), px(44)).apply { marginEnd = px(12) })
-        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         col.addView(TextView(context).apply {
             text = state
             textSize = 17f
@@ -109,8 +98,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         col.addView(d)
-        row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
-        body.addView(row)
+        body.addView(col)
         return d
     }
 
