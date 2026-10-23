@@ -35,6 +35,8 @@ class CarouselAdapter(
         const val HEIGHT = 210
         const val POSTER_W = 140
         const val WIDE_W = 373
+        /** extra space after the first (selected) card */
+        const val GAP_FIRST = 18
         private const val MEDIA = 0
         private const val MATCH = 1
         private const val APP = 2
@@ -92,6 +94,7 @@ class CarouselAdapter(
             is RaceSession -> h.bindRace(item)
             is TvShow -> h.bindTv(item)
         }
+        if (item !is MediaItem) h.setExpanded(position == active, animate = false)
         h.itemView.setOnFocusChangeListener { v, has ->
             v.animate().scaleX(if (has) 1.04f else 1f).scaleY(if (has) 1.04f else 1f)
                 .setDuration(440).setInterpolator(DecelerateInterpolator(1.4f)).start()
@@ -376,25 +379,46 @@ class CarouselAdapter(
         }
 
         /** Wide landscape card ⇄ vertical poster, animating width and crossfading the images. */
+        /** the first card keeps a little more room after it: it pushes the rest of the row away */
+        private fun gapAfter(f: Float) = (px(16) + px(GAP_FIRST) * f).toInt()
+
         fun setExpanded(expanded: Boolean, animate: Boolean) {
-            if (type != MEDIA) return
+            if (type != MEDIA) {
+                val to = gapAfter(if (expanded) 1f else 0f)
+                val lp = card.layoutParams as RecyclerView.LayoutParams
+                if (!animate) { card.layoutParams = lp.apply { marginEnd = to }; return }
+                widthAnim?.cancel()
+                widthAnim = ValueAnimator.ofInt(lp.marginEnd, to).apply {
+                    duration = 560
+                    interpolator = DecelerateInterpolator(1.6f)
+                    addUpdateListener { card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply { marginEnd = it.animatedValue as Int } }
+                    start()
+                }
+                return
+            }
             val target = px(if (expanded) WIDE_W else POSTER_W)
             widthAnim?.cancel()
             val posterAlpha = if (expanded) 0f else 1f
             val wideAlpha = if (expanded) 1f else 0f
+            val gapTo = gapAfter(if (expanded) 1f else 0f)
             if (!animate) {
-                card.layoutParams = card.layoutParams.apply { width = target }
+                card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply { width = target; marginEnd = gapTo }
                 poster.alpha = posterAlpha
                 rank.alpha = posterAlpha
                 logo.alpha = wideAlpha
                 return
             }
             val from = card.layoutParams.width
-            widthAnim = ValueAnimator.ofInt(from, target).apply {
+            val gapFrom = (card.layoutParams as RecyclerView.LayoutParams).marginEnd
+            widthAnim = ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = 560 // ≈280 ms at 0.5x animation scale
                 interpolator = DecelerateInterpolator(1.6f)
                 addUpdateListener {
-                    card.layoutParams = card.layoutParams.apply { width = it.animatedValue as Int }
+                    val t = it.animatedValue as Float
+                    card.layoutParams = (card.layoutParams as RecyclerView.LayoutParams).apply {
+                        width = (from + (target - from) * t).toInt()
+                        marginEnd = (gapFrom + (gapTo - gapFrom) * t).toInt()
+                    }
                 }
                 start()
             }
