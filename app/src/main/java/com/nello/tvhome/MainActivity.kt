@@ -415,17 +415,15 @@ class MainActivity : ComponentActivity(), Host {
     private fun showNetworkPopup() {
         val st = network.state
         val details = network.details().toMap()
-        val p = popup().title(
-            when {
-                !st.online -> "Offline"
-                st.ethernet -> "Ethernet"
-                else -> details["Rete"] ?: "Wi-Fi"
-            },
-            if (st.online) "Connesso a Internet" else "Nessuna connessione a Internet",
+        val p = popup()
+        val signal = details["Segnale"]?.substringBefore(" (")
+        val ping = p.hero(
+            when { !st.online -> StatusIcon.Kind.OFFLINE; st.ethernet -> StatusIcon.Kind.ETHERNET; else -> StatusIcon.Kind.WIFI },
+            when { !st.online -> "Offline"; st.ethernet -> "Ethernet"; else -> details["Rete"] ?: "Wi-Fi" },
+            if (st.online) listOfNotNull("Connesso", signal).joinToString(" · ") else "Nessuna connessione a Internet",
+            active = st.online,
         )
-        details["Segnale"]?.let { p.info("Segnale", it.substringBefore(" (")) }
-        val ping = p.info("Ping", "…")
-        p.info("VPN", if (st.vpn) "Attiva" else "Non attiva")
+        val pingBase = ping.text
         // device status
         val (freeDisk, totalDisk) = DeviceStatus.storage()
         val (freeRam, totalRam) = DeviceStatus.memory(this)
@@ -434,7 +432,7 @@ class MainActivity : ComponentActivity(), Host {
         p.gap()
         p.button("Dettagli e test velocità") { openConnectionDetails() }
         p.button("Impostazioni rete") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } }
-        val job = lifecycleScope.launch { ping.text = network.ping()?.let { "$it ms" } ?: "—" }
+        val job = lifecycleScope.launch { network.ping()?.let { ping.text = "$pingBase · $it ms" } }
         p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.netButton))
     }
@@ -453,7 +451,9 @@ class MainActivity : ComponentActivity(), Host {
     private fun showHeadphonesPopup() {
         BluetoothAudio.withA2dp(this) {
             val now = BluetoothAudio.connected()
-            val p = popup().title("Audio", now?.let { "Esce da ${BluetoothAudio.pretty(it)}" } ?: "Esce dalla TV")
+            val p = popup()
+            p.hero(if (now != null) StatusIcon.Kind.HEADPHONES else StatusIcon.Kind.SPEAKER,
+                now?.let { BluetoothAudio.pretty(it) } ?: "TV", "L'audio esce da qui", level = if (now != null) 1 else 0)
             p.button(if (now == null) "✓  TV" else "TV") {
                 now?.let { d -> BluetoothAudio.disconnect(d); toast("Audio di nuovo sulla TV") }
             }
@@ -477,10 +477,10 @@ class MainActivity : ComponentActivity(), Host {
         val vpn = network.state.vpn
         val installed = installedVpns()
         val chosen = installed.firstOrNull { it.first == prefs.vpnPackage }
-        val p = popup().title("VPN", if (vpn) "Attiva · il traffico passa dalla VPN" else "Non attiva")
-        p.info("App", chosen?.second ?: "Da scegliere")
-        val ip = p.info("IP pubblico", "…")
-        p.gap()
+        val p = popup()
+        val ip = p.hero(StatusIcon.Kind.VPN, if (vpn) "Protetto" else "Non protetto",
+            chosen?.second ?: "Nessuna app VPN scelta", level = if (vpn) 1 else 0, active = vpn)
+        val ipBase = ip.text
         when {
             installed.isEmpty() -> p.text("Nessuna app VPN installata.")
             chosen != null -> {
@@ -490,7 +490,7 @@ class MainActivity : ComponentActivity(), Host {
             else -> p.button("Scegli l'app VPN") { chooseVpn() }
         }
         p.button("Dettagli connessione") { openConnectionDetails() }
-        val job = lifecycleScope.launch { ip.text = network.publicIp() ?: "—" }
+        val job = lifecycleScope.launch { network.publicIp()?.let { ip.text = "$ipBase · IP $it" } }
         p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.vpnButton))
     }
@@ -506,38 +506,12 @@ class MainActivity : ComponentActivity(), Host {
         p.showUnder(findViewById(R.id.vpnButton))
     }
 
+    /** ⚙: just the two ways in — the launcher's settings and the Fire TV's own. */
     private fun showSettingsPopup() {
-        val p = popup().title("Impostazioni")
-        p.button("Sfondo: " + LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) { chooseWallpaper() }
-        lateinit var nightButton: TextView
-        nightButton = p.button("Modalità notte: " + if (prefs.night) "attiva" else "spenta", keepOpen = true) {
-            prefs.night = !prefs.night
-            nightButton.text = "Modalità notte: " + if (prefs.night) "attiva" else "spenta"
-            applyPrefs()
-        }
-        p.button("Rete e Wi-Fi") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } }
-        p.button("Telecomandi e Bluetooth") { runCatching { startActivity(Intent("android.settings.CONTROLLERS_SETTINGS")) } }
-        p.gap()
-        p.button("Personalizza") { startActivity(Intent(this, CustomizeActivity::class.java)) }
-        p.button("Tutte le impostazioni") { openSettings() }
-        p.showUnder(findViewById(R.id.settingsButton))
-    }
-
-    /** One "Sfondo" menu: the built-in wallpapers, your last image, or pick a new one from the device. */
-    private fun chooseWallpaper() {
-        val hasCustom = java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).exists()
-        val p = popup().title("Sfondo")
-        LauncherPrefs.WALLPAPERS.filter { it.first != "custom" }.forEach { (key, label) ->
-            p.button(if (key == prefs.wallpaper) "✓  $label" else label) {
-                prefs.wallpaper = key
-                applyPrefs()
-            }
-        }
-        if (hasCustom) p.button(if (prefs.wallpaper == "custom") "✓  La tua immagine" else "La tua immagine") {
-            prefs.wallpaper = "custom"
-            applyPrefs()
-        }
-        p.button("Scegli immagine dal dispositivo…") { startActivity(Intent(this, WallpaperPickerActivity::class.java)) }
+        val p = popup()
+        p.hero(StatusIcon.Kind.GEAR, "Impostazioni", "Nello TV · versione ${BuildConfig.VERSION_CODE}")
+        p.button("Nello TV") { openSettings() }
+        p.button("Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
         p.showUnder(findViewById(R.id.settingsButton))
     }
 

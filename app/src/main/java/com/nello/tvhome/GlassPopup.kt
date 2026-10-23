@@ -14,12 +14,12 @@ import android.widget.TextView
  * The launcher's pop-up: a glass card that opens right under what you selected,
  * with the essentials (title, a few info rows) and buttons — "Dettagli" leads to a full page.
  */
-class GlassPopup(private val context: Context, widthDp: Int = 340) {
+class GlassPopup(private val context: Context, widthDp: Int = 300) {
 
     private val dp = context.resources.displayMetrics.density
-    private val body = LinearLayout(context).apply {
+    private val body = LiquidList(context).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(px(18), px(16), px(18), px(14))
+        setPadding(px(12), px(12), px(12), px(10))
     }
     /** long lists (e.g. the catalogue picker) scroll inside the card instead of running off screen */
     private val scroller = android.widget.ScrollView(context).apply {
@@ -27,10 +27,11 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         isFillViewport = true
         addView(body, ViewGroup.LayoutParams(-1, -2))
     }
-    private val card = GlassView(context).apply {
-        zoomOnFocus = false
-        addView(scroller, ViewGroup.LayoutParams(-1, -2))
+    private val card = LiquidCard(context).apply {
+        addView(scroller, android.widget.FrameLayout.LayoutParams(-1, -2))
     }
+    /** the button it came out of (↑ on the first row goes back there) */
+    private var anchor: View? = null
     /** set while the spotlight is open: closing plays its exit animation first */
     private var exitAnimation: ((done: () -> Unit) -> Unit)? = null
 
@@ -57,33 +58,76 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
     fun title(text: String, subtitle: String? = null) = apply {
         body.addView(TextView(context).apply {
             this.text = text
-            textSize = 18f
+            textSize = 16f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(0xFFFFFFFF.toInt())
+            setPadding(px(6), 0, px(6), 0)
         })
         if (subtitle != null) body.addView(TextView(context).apply {
             this.text = subtitle
             textSize = 12f
-            setTextColor(context.getColor(R.color.accent))
-            setPadding(0, px(2), 0, 0)
+            setTextColor(0x99FFFFFF.toInt())
+            setPadding(px(6), px(2), px(6), 0)
         })
-        body.addView(View(context), LinearLayout.LayoutParams(-1, px(10)))
+        body.addView(View(context), LinearLayout.LayoutParams(-1, px(8)))
+    }
+
+    /**
+     * The pop-up's reason to be there: what that button is about right now, at a glance —
+     * a round glass bubble with its icon, the state in big, a detail underneath.
+     * Returns the detail line, to fill in later (ping, IP…).
+     */
+    fun hero(kind: StatusIcon.Kind, state: String, detail: String, level: Int = 3, active: Boolean = true): TextView {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(px(4), px(2), px(4), px(10))
+        }
+        val bubble = android.widget.FrameLayout(context).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(if (active) 0x33FFFFFF else 0x14FFFFFF)
+                setStroke(px(1), 0x40FFFFFF)
+            }
+            addView(StatusIcon(context).apply { this.kind = kind; this.level = level }, android.widget.FrameLayout.LayoutParams(px(24), px(24), Gravity.CENTER))
+        }
+        row.addView(bubble, LinearLayout.LayoutParams(px(44), px(44)).apply { marginEnd = px(12) })
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(TextView(context).apply {
+            text = state
+            textSize = 17f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(0xFFFFFFFF.toInt())
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        val d = TextView(context).apply {
+            text = detail
+            textSize = 12f
+            setTextColor(0x99FFFFFF.toInt())
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        col.addView(d)
+        row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+        body.addView(row)
+        return d
     }
 
     /** A "label · value" row; returns the value view so it can be filled in later. */
     fun info(label: String, value: String): TextView {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(px(4), px(3), px(4), px(3))
+            setPadding(px(6), px(3), px(6), px(3))
         }
         row.addView(TextView(context).apply {
             text = label
-            textSize = 13f
+            textSize = 12.5f
             setTextColor(context.getColor(R.color.text_dim))
         }, LinearLayout.LayoutParams(0, -2, 1f))
         val v = TextView(context).apply {
             text = value
-            textSize = 13f
+            textSize = 12.5f
             gravity = Gravity.END
             setTextColor(0xFFFFFFFF.toInt())
         }
@@ -106,7 +150,12 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         body.addView(v, LinearLayout.LayoutParams(-1, height))
     }
 
-    fun gap() = apply { body.addView(View(context), LinearLayout.LayoutParams(-1, px(8))) }
+    /** a hairline between groups */
+    fun gap() = apply {
+        body.addView(View(context).apply { setBackgroundColor(0x1FFFFFFF) }, LinearLayout.LayoutParams(-1, px(1)).apply {
+            setMargins(px(8), px(6), px(8), px(6))
+        })
+    }
 
     /** A pill button; by default it closes the pop-up after running. */
     fun button(text: String, keepOpen: Boolean = false, action: () -> Unit): TextView {
@@ -115,13 +164,13 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
         val b = TextView(context).apply {
             this.text = text.removePrefix("✓").trim()
             if (selected) {
+                // white here, dark when the pill is over it (the list re-inks what's under the pill)
                 setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
                     setColor(android.graphics.Color.WHITE)
-                    setSize(px(8), px(8))
+                    setSize(px(7), px(7))
                 }, null)
                 compoundDrawablePadding = px(10)
-                compoundDrawableTintList = context.getColorStateList(R.color.tab_text)
                 typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             }
             textSize = 14f
@@ -129,14 +178,23 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
             isClickable = true
             gravity = Gravity.CENTER_VERTICAL
             setPadding(px(14), 0, px(14), 0)
-            setBackgroundResource(R.drawable.tab_bg)
-            setTextColor(context.getColorStateList(R.color.tab_text))
+            // no background of its own: the list's liquid pill slides behind the focused one
+            background = null
+            setTextColor(0xE6FFFFFF.toInt())
             setOnClickListener {
                 if (!keepOpen) dismiss()
                 action()
             }
+            setOnFocusChangeListener { v, has -> if (has) body.pillTo(v) }
+            setOnKeyListener { v, code, e ->
+                // ↑ on the first row: back into the button it came from, no Back needed
+                if (code == android.view.KeyEvent.KEYCODE_DPAD_UP && v === firstButton && anchor != null) {
+                    if (e.action == android.view.KeyEvent.ACTION_DOWN) closeToAnchor()
+                    true
+                } else false
+            }
         }
-        body.addView(b, LinearLayout.LayoutParams(-1, px(40)).apply { topMargin = px(2) })
+        body.addView(b, LinearLayout.LayoutParams(-1, px(38)).apply { topMargin = px(1) })
         if (firstButton == null) firstButton = b
         return b
     }
@@ -144,14 +202,96 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
     /** Opens under [anchor], right-aligned with it when [alignEnd]. */
     fun showUnder(anchor: View, alignEnd: Boolean = true) {
         prepare()
+        this.anchor = anchor
+        // the window starts at the button's top: the card is drawn from the button down to its place
+        val gapTop = anchor.height + px(10)
+        card.contentTop = gapTop
+        (scroller.layoutParams as android.widget.FrameLayout.LayoutParams).topMargin = gapTop
         card.measure(View.MeasureSpec.makeMeasureSpec(window.width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
         val loc = IntArray(2)
         anchor.getLocationOnScreen(loc)
-        val available = context.resources.displayMetrics.heightPixels - (loc[1] + anchor.height) - px(10) - px(24)
+        val available = context.resources.displayMetrics.heightPixels - loc[1] - px(24)
         window.height = if (card.measuredHeight > available) available else ViewGroup.LayoutParams.WRAP_CONTENT
+        window.animationStyle = 0
+        window.elevation = 0f
         val x = if (alignEnd) anchor.width - window.width else 0
-        window.showAsDropDown(anchor, x, px(10))
+        window.showAsDropDown(anchor, x, -anchor.height)
         focusFirst()
+        pourFrom(anchor)
+    }
+
+    // ---------------------------------------------------------------- liquid open / close
+
+    private val lead = android.view.animation.PathInterpolator(0.25f, 0.9f, 0.3f, 1f)
+    private val trail = android.view.animation.PathInterpolator(0.5f, 0f, 0.25f, 1.12f)
+    private var from = android.graphics.RectF()
+    private var fromRadius = 0f
+    private var shapeAnim: android.animation.ValueAnimator? = null
+
+    /** The card's outline at progress t (0 = the button's own pill, 1 = the whole card). */
+    private fun shapeAt(t: Float, opening: Boolean) {
+        val to = android.graphics.RectF(0f, card.contentTop.toFloat(), card.width.toFloat(), card.height.toFloat())
+        // opening: the bottom and the near side rush ahead, the top and far side follow with a
+        // little wobble; closing: the other way round, so it's always the front that leads
+        val fast = if (opening) lead.getInterpolation(t) else 1f - trail.getInterpolation(1f - t)
+        val slow = if (opening) trail.getInterpolation(t) else 1f - lead.getInterpolation(1f - t)
+        fun mix(a: Float, b: Float, k: Float) = a + (b - a) * k
+        card.shape = android.graphics.RectF(
+            mix(from.left, to.left, slow), mix(from.top, to.top, slow),
+            mix(from.right, to.right, fast), mix(from.bottom, to.bottom, fast),
+        )
+        card.shapeRadius = mix(fromRadius, card.radius, fast.coerceIn(0f, 1f))
+        // starts as the white button, turns into glass as it opens up
+        card.buttonness = (1f - t / 0.45f).coerceIn(0f, 1f).let { it * it }
+    }
+
+    private fun pourFrom(anchor: View) {
+        scroller.alpha = 0f
+        card.shape = android.graphics.RectF()
+        card.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                card.viewTreeObserver.removeOnPreDrawListener(this)
+                val a = IntArray(2).also { anchor.getLocationOnScreen(it) }
+                val c = IntArray(2).also { card.getLocationOnScreen(it) }
+                val w = anchor.width * anchor.scaleX
+                val h = anchor.height * anchor.scaleY
+                from = android.graphics.RectF(a[0] - c[0].toFloat(), a[1] - c[1].toFloat(), a[0] - c[0] + w, a[1] - c[1] + h)
+                fromRadius = minOf(w, h) / 2f
+                shapeAt(0f, true)
+                card.postOnAnimation {
+                    shapeAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                        duration = 900 // ≈450 ms at 0.5x
+                        addUpdateListener { shapeAt(it.animatedValue as Float, true) }
+                        start()
+                    }
+                    scroller.translationY = px(10).toFloat()
+                    scroller.animate().alpha(1f).translationY(0f).setStartDelay(260).setDuration(560)
+                        .setInterpolator(android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)).start()
+                }
+                return true
+            }
+        })
+        // closing: the content fades, the glass drains back into the button
+        exitAnimation = { done ->
+            shapeAnim?.cancel()
+            scroller.animate().cancel()
+            scroller.animate().alpha(0f).setStartDelay(0).setDuration(180).start()
+            android.animation.ValueAnimator.ofFloat(1f, 0f).apply {
+                duration = 560
+                addUpdateListener { shapeAt(it.animatedValue as Float, false) }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(a: android.animation.Animator) { card.postOnAnimation { done() } }
+                })
+                start()
+            }
+        }
+    }
+
+    /** ↑ from the first row: close and give the focus back to the button. */
+    private fun closeToAnchor() {
+        val a = anchor ?: return
+        a.requestFocus()
+        dismiss()
     }
 
     fun showCentered(parent: View) {
@@ -342,4 +482,175 @@ class GlassPopup(private val context: Context, widthDp: Int = 340) {
     }
 
     private fun px(v: Int) = (v * dp).toInt()
+}
+
+/**
+ * The pop-up's glass: the blurred wallpaper (like every glass surface in the launcher) with the
+ * frosted gradient and a hairline border, drawn inside [shape] — which the pop-up animates, so the
+ * card can pour out of a button and drain back into it. Children are clipped to the same shape.
+ */
+class LiquidCard(context: Context) : android.widget.FrameLayout(context) {
+    private val dp = resources.displayMetrics.density
+    val radius = 20 * dp
+    /** where the card's own area starts (above it: the button it comes out of) */
+    var contentTop = 0
+    var shape: android.graphics.RectF? = null
+        set(v) { field = v; invalidate() }
+    var shapeRadius = radius
+    /** 0..1: how much the shape still looks like the white focused button it pours out of */
+    var buttonness = 0f
+        set(v) { field = v; invalidate() }
+    private val path = android.graphics.Path()
+    private val rect = android.graphics.RectF()
+    private val loc = IntArray(2)
+    private val glass = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+    private val frost = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val border = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = dp
+        color = 0x4DFFFFFF
+    }
+    private val matrix = android.graphics.Matrix()
+    private var shaderFor: android.graphics.Bitmap? = null
+
+    init {
+        setWillNotDraw(false)
+        clipChildren = true
+    }
+
+    private fun current(): Float {
+        val s = shape
+        if (s != null) { rect.set(s); return shapeRadius }
+        rect.set(0f, contentTop.toFloat(), width.toFloat(), height.toFloat())
+        return radius
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val r = minOf(current(), rect.height() / 2f, rect.width() / 2f)
+        if (rect.width() <= 0f || rect.height() <= 0f) return
+        GlassView.blurred?.let { b ->
+            if (shaderFor !== b) {
+                glass.shader = android.graphics.BitmapShader(b, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                shaderFor = b
+            }
+            getLocationOnScreen(loc)
+            val dm = resources.displayMetrics
+            matrix.setScale(dm.widthPixels.toFloat() / b.width, dm.heightPixels.toFloat() / b.height)
+            matrix.postTranslate(-loc[0].toFloat(), -loc[1].toFloat())
+            glass.shader.setLocalMatrix(matrix)
+            canvas.drawRoundRect(rect, r, r, glass)
+        }
+        frost.shader = android.graphics.LinearGradient(0f, rect.top, 0f, rect.bottom,
+            if (GlassView.night) intArrayOf(0x1FFFFFFF, 0x0FFFFFFF, 0x08FFFFFF) else Theme.frostColors(),
+            floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(rect, r, r, frost)
+        // a darker veil so text stays readable on bright wallpapers
+        frost.shader = null
+        frost.color = 0x59000000
+        canvas.drawRoundRect(rect, r, r, frost)
+        if (buttonness > 0f) {
+            frost.color = ((buttonness * 0xF2).toInt() shl 24) or (Theme.accent and 0xFFFFFF)
+            canvas.drawRoundRect(rect, r, r, frost)
+        }
+        val h = border.strokeWidth / 2
+        canvas.drawRoundRect(rect.left + h, rect.top + h, rect.right - h, rect.bottom - h, r, r, border)
+    }
+
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        val r = minOf(current(), rect.height() / 2f, rect.width() / 2f)
+        if (rect.width() <= 0f || rect.height() <= 0f) return
+        path.reset()
+        path.addRoundRect(rect, r, r, android.graphics.Path.Direction.CW)
+        canvas.save()
+        canvas.clipPath(path)
+        super.dispatchDraw(canvas)
+        canvas.restore()
+    }
+}
+
+/**
+ * The pop-up's rows, with the launcher's liquid selector: one pill slides from row to row (its
+ * front edge leading, the back catching up with a little wobble), and whatever is under it is
+ * re-drawn dark — so a row turns dark exactly where the pill is, mid-slide included.
+ */
+class LiquidList(context: Context) : LinearLayout(context) {
+    private val dp = resources.displayMetrics.density
+    private val pill = android.graphics.RectF()
+    private val start = android.graphics.RectF()
+    private val end = android.graphics.RectF()
+    private var shown = false
+    private var grow = 1f
+    private var anim: android.animation.ValueAnimator? = null
+    private val lead = android.view.animation.PathInterpolator(0.25f, 0.9f, 0.3f, 1f)
+    private val trail = android.view.animation.PathInterpolator(0.5f, 0f, 0.25f, 1.12f)
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val ink = android.graphics.Paint()
+    private val clip = android.graphics.Path()
+
+    init { setWillNotDraw(false) }
+
+    fun pillTo(v: View) {
+        end.set(v.left.toFloat(), v.top.toFloat(), v.right.toFloat(), v.bottom.toFloat())
+        anim?.cancel()
+        if (!shown) {
+            // first time: it grows out of the row's centre
+            shown = true
+            pill.set(end)
+            anim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 520
+                interpolator = lead
+                addUpdateListener { grow = it.animatedValue as Float; invalidate() }
+                start()
+            }
+            return
+        }
+        start.set(pill)
+        val down = end.top > start.top
+        anim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 560 // ≈280 ms at 0.5x
+            addUpdateListener {
+                val t = it.animatedValue as Float
+                val f = lead.getInterpolation(t)
+                val b = trail.getInterpolation(t)
+                // the edge in the direction of travel leads
+                val top = start.top + (end.top - start.top) * (if (down) b else f)
+                val bottom = start.bottom + (end.bottom - start.bottom) * (if (down) f else b)
+                pill.set(end.left, top, end.right, bottom)
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    private fun current(): android.graphics.RectF {
+        if (grow >= 1f) return pill
+        val cx = pill.centerX(); val cy = pill.centerY()
+        val hw = pill.width() / 2 * (0.3f + 0.7f * grow); val hh = pill.height() / 2 * (0.5f + 0.5f * grow)
+        return android.graphics.RectF(cx - hw, cy - hh, cx + hw, cy + hh)
+    }
+
+    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+        if (!shown || !hasFocus()) { super.dispatchDraw(canvas); return }
+        val r = current()
+        val radius = r.height() / 2
+        paint.color = (((0xF2 * minOf(1f, grow * 1.4f)).toInt()) shl 24) or (Theme.accent and 0xFFFFFF)
+        canvas.drawRoundRect(r, radius, radius, paint)
+        super.dispatchDraw(canvas)
+        // the rows again in the "on accent" colour, only inside the pill
+        val c = Theme.onAccent
+        ink.colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+            0f, 0f, 0f, 0f, android.graphics.Color.red(c).toFloat(),
+            0f, 0f, 0f, 0f, android.graphics.Color.green(c).toFloat(),
+            0f, 0f, 0f, 0f, android.graphics.Color.blue(c).toFloat(),
+            0f, 0f, 0f, 2.5f, 0f,
+        ))
+        clip.reset()
+        clip.addRoundRect(r, radius, radius, android.graphics.Path.Direction.CW)
+        canvas.save()
+        canvas.clipPath(clip)
+        canvas.saveLayer(r, ink)
+        super.dispatchDraw(canvas)
+        canvas.restore()
+        canvas.restore()
+    }
 }
