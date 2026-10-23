@@ -109,6 +109,28 @@ class MainActivity : ComponentActivity(), Host {
     private var carouselAdapter: CarouselAdapter? = null
     private var dockApps: List<String> = emptyList()
     private var themeSig = ""
+    private lateinit var carouselFrame: android.widget.FrameLayout
+    private lateinit var heroInfo: android.widget.LinearLayout
+    private val heroTitle by lazy {
+        TextView(this).apply {
+            textSize = 24f
+            typeface = Fonts.semiBold
+            setTextColor(0xFFFFFFFF.toInt())
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setShadowLayer(10f, 0f, 2f, 0xCC000000.toInt())
+        }
+    }
+    private val heroMeta by lazy {
+        TextView(this).apply {
+            textSize = 14f
+            setTextColor(0xCCFFFFFF.toInt())
+            maxLines = 3
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setLineSpacing(0f, 1.15f)
+            setShadowLayer(8f, 0f, 1f, 0xCC000000.toInt())
+        }
+    }
     private lateinit var catalogDots: CatalogDots
     private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
 
@@ -205,7 +227,17 @@ class MainActivity : ComponentActivity(), Host {
                     gravity = android.view.Gravity.TOP or android.view.Gravity.START
                     marginStart = (10 * resources.displayMetrics.density).toInt()
                 })
+                // hero mode: the info sits beside the big card, above the small ones
+                heroInfo = android.widget.LinearLayout(context).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    alpha = 0f
+                    visibility = View.INVISIBLE
+                    addView(heroTitle, android.widget.LinearLayout.LayoutParams(-1, -2))
+                    addView(heroMeta, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6 * resources.displayMetrics.density).toInt() })
+                }
+                addView(heroInfo, android.widget.FrameLayout.LayoutParams(-1, -2))
             }
+            carouselFrame = frame
             parent.addView(frame, at, (lp as? ViewGroup.MarginLayoutParams)?.let { ViewGroup.MarginLayoutParams(it).apply { height = ViewGroup.LayoutParams.WRAP_CONTENT } } ?: ViewGroup.LayoutParams(-1, -2))
         }
         // room after the last card so even it can slide to the start and open fully on screen
@@ -252,6 +284,7 @@ class MainActivity : ComponentActivity(), Host {
 
         setupTabs()
         applyTheme()
+        watchHero()
         setupSearch()
         setupTopBar()
         applyPrefs()
@@ -1636,7 +1669,10 @@ class MainActivity : ComponentActivity(), Host {
         val first = shownItems.isEmpty() || row !== shownCatalog
         shownCatalog = row
         shownItems = items
+        val previous = carouselAdapter
         carouselAdapter = CarouselAdapter(items, this, lifecycleScope)
+        // still in the carousel (↑/↓ to another catalogue): the new one opens as a hero too
+        if (heroOn && previous != null && previous.hero) carouselAdapter!!.presetHero(previous.heroW, previous.heroH)
         val restore = pendingCard.remove(state.section)?.takeIf { it in items.indices }
         if (restore != null) carouselAdapter!!.startAt(restore)
         carousel.adapter = carouselAdapter
@@ -1668,6 +1704,84 @@ class MainActivity : ComponentActivity(), Host {
     private fun setCarouselInfo(title: String, meta: String) {
         carouselTitle.text = title
         carouselMeta.text = meta
+        heroTitle.text = title
+        heroMeta.text = meta.replace(" · ", "\n")
+    }
+
+    // ---------------------------------------------------------------- hero
+
+    private var heroOn = false
+    /** the text above the row as it was before the hero (restored on the way out) */
+    private var textAbove = View.GONE
+    private var heroAnim: android.animation.ValueAnimator? = null
+
+    /** Focus in the carousel → hero; anywhere else → the normal row. */
+    private fun watchHero() {
+        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, new ->
+            var v: android.view.ViewParent? = new?.parent
+            var inside = false
+            while (v != null) { if (v === carousel) { inside = true; break }; v = v.parent }
+            if (inside != heroOn) setHero(inside && isSingle(current))
+        }
+    }
+
+    private fun setHero(on: Boolean) {
+        val adapter = carouselAdapter ?: return
+        heroOn = on
+        val dp = resources.displayMetrics.density
+        val normalH = (234 * dp * Theme.cardScale).toInt()
+        val pad = carousel.paddingTop + carousel.paddingBottom
+        var heroW = 0; var heroH = 0
+        if (on) {
+            // 2/3 of the row's width; as tall as fits between the catalogue name and the dock
+            // (the carousel's right padding is huge on purpose — the last card can reach the start —
+            // so the row's width is the screen minus the left margin on both sides)
+            heroW = ((resources.displayMetrics.widthPixels - 2 * carousel.paddingLeft) * 2f / 3f).toInt()
+            val dock = findViewById<View>(R.id.dock)
+            val dlp = dock.layoutParams as ViewGroup.MarginLayoutParams
+            // exactly what's left in the screen between the catalogue name and the dock
+            val room = single.height - catalogLabel.bottom - (12 * dp).toInt() - dlp.topMargin - dock.height - dlp.bottomMargin - pad
+            heroH = minOf(heroW * 9 / 16, room).coerceAtLeast((CarouselAdapter.HEIGHT * dp).toInt())
+        }
+        // the info moves beside the hero: the text above the row leaves the layout while it's on
+        if (on) textAbove = carouselTitle.visibility
+        val infoShown = textAbove == View.VISIBLE || current == Section.MOVIES || current == Section.SERIES
+        listOf(carouselTitle, carouselMeta).forEach {
+            it.animate().cancel()
+            if (on) it.visibility = View.GONE
+            else { it.visibility = textAbove; it.alpha = 0f; it.animate().alpha(1f).setStartDelay(300).setDuration(360).start() }
+        }
+        if (on) {
+            heroInfo.layoutParams = (heroInfo.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                marginStart = carousel.paddingLeft + heroW + ((16 + CarouselAdapter.GAP_FIRST) * dp).toInt()
+                marginEnd = carousel.paddingLeft
+                topMargin = carousel.paddingTop
+            }
+            heroInfo.visibility = if (infoShown) View.VISIBLE else View.INVISIBLE
+            heroInfo.animate().alpha(1f).setStartDelay(240).setDuration(420).start()
+        } else heroInfo.animate().alpha(0f).setStartDelay(0).setDuration(200).start()
+        adapter.setHero(heroW, heroH, carousel)
+        // the row grows (or shrinks back) with the cards; the text above leaves its room
+        val from = carousel.layoutParams.height
+        val to = if (on) heroH + pad else normalH
+        val topFrom = (carousel.layoutParams as ViewGroup.MarginLayoutParams).topMargin
+        val gap = resources.getDimensionPixelSize(R.dimen.dock_bottom) - (12 * dp).toInt()
+        val topTo = if (on || textAbove != View.VISIBLE) 0 else gap
+        heroAnim?.cancel()
+        heroAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 600
+            interpolator = android.view.animation.PathInterpolator(0.2f, 0.9f, 0.25f, 1f)
+            addUpdateListener {
+                val t = it.animatedValue as Float
+                val h = (from + (to - from) * t).toInt()
+                carousel.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                    height = h
+                    topMargin = (topFrom + (topTo - topFrom) * t).toInt()
+                }
+                catalogDots.updateLayoutParams<ViewGroup.LayoutParams> { height = h }
+            }
+            start()
+        }
     }
 
     /** "Popolari ora ▾": switch the carousel to another catalog of this tab. */
