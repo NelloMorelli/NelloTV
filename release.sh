@@ -14,5 +14,5 @@ mkdir -p build
 cp app/build/outputs/apk/release/app-release.apk "build/NelloTV-v$V.apk"
 git push -q origin main
 # the tag stays the plain number (the TV compares it); the title is the name you see
-gh release create "v$V" "build/NelloTV-v$V.apk" --title "Nello TV $NAME" --notes "${1:-Aggiornamento}"
+gh release create "v$V" "build/NelloTV-v$V.apk" --title "Nello TV $NAME · build $V" --notes "${1:-Aggiornamento}"
 echo "Pubblicata la versione $NAME"
