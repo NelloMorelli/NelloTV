@@ -980,7 +980,10 @@ class MainActivity : ComponentActivity(), Host {
 
     /** What slides when the tab changes: the content, not the header; the dock only if it changes. */
     private fun tabContent(section: Section, dockChanges: Boolean): List<View> =
-        if (isSingle(section)) listOfNotNull(catalogLabel, carousel, carouselTitle, carouselMeta, below, findViewById<View>(R.id.dock).takeIf { dockChanges })
+        // not "below" (Esplora's long page under the dock): it's off screen during the switch, and
+        // fading a view that tall makes the GPU render it all into a layer on every frame
+        if (isSingle(section)) listOfNotNull(carouselEyebrow.takeIf { it.visibility == View.VISIBLE }, catalogLabel, carousel, carouselTitle, carouselMeta,
+            findViewById<View>(R.id.dock).takeIf { dockChanges })
         else listOf(hero, rowsView)
 
     /**
@@ -1045,7 +1048,7 @@ class MainActivity : ComponentActivity(), Host {
         // durations are doubled: the Fire TV runs animations at 0.5x
         out.forEachIndexed { i, v ->
             v.animate().cancel()
-            v.animate().alpha(0f).translationX(-dir * shift).setDuration(240)
+            v.animate().withLayer().alpha(0f).translationX(-dir * shift).setDuration(240)
                 .setInterpolator(android.view.animation.AccelerateInterpolator(1.4f))
                 .withEndAction(if (i != 0) null else Runnable {
                     if (gen != tabAnimGen) return@Runnable

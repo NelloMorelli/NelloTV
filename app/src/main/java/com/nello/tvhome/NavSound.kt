@@ -51,12 +51,15 @@ object NavSound {
     fun move() = play(move, 0.28f)
     fun select() = play(select, 0.32f)
 
+    // played off the main thread: SoundPool.play is a binder call, it mustn't delay the next frame
+    private val worker by lazy { android.os.HandlerThread("navsound").apply { start() }.let { android.os.Handler(it.looper) } }
+
     private fun play(id: Int, vol: Float) {
         if (!enabled || id == 0) return
         val now = System.currentTimeMillis()
         if (now - last < 45) return
         last = now
-        pool?.play(id, vol, vol, 1, 0, 1f)
+        worker.post { pool?.play(id, vol, vol, 1, 0, 1f) }
     }
 
     /** Tick on every focus move inside [root]'s window. */
