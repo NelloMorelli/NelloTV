@@ -142,6 +142,16 @@
                     </FrameLayout>
 
                     <FrameLayout
+                        android:id="@+id/recentsButton"
+                        style="@style/BarIcon"
+                        android:contentDescription="App recenti">
+
+                        <com.nello.tvhome.StatusIcon
+                            android:id="@+id/recentsIcon"
+                            style="@style/BarGlyph" />
+                    </FrameLayout>
+
+                    <FrameLayout
                         android:id="@+id/settingsButton"
                         style="@style/BarIcon"
                         android:contentDescription="Impostazioni">

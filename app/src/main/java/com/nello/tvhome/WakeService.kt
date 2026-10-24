@@ -38,8 +38,27 @@ class WakeService : AccessibilityService() {
         instance = this
     }
 
+    // apps with a launcher entry (TV or phone), refreshed every 10 minutes
+    private var launchable: Set<String> = emptySet()
+    private var launchableAt = 0L
+
+    private fun isApp(pkg: String): Boolean {
+        if (System.currentTimeMillis() - launchableAt > 10 * 60_000L) {
+            launchableAt = System.currentTimeMillis()
+            launchable = listOf(android.content.Intent.CATEGORY_LEANBACK_LAUNCHER, android.content.Intent.CATEGORY_LAUNCHER).flatMap { cat ->
+                packageManager.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(cat), 0).map { it.activityInfo.packageName }
+            }.toSet()
+        }
+        return pkg in launchable
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        // the app switcher's list: every app that comes to the front (not the launchers)
+        event.packageName?.toString()?.let { pkg ->
+            if (pkg != packageName && pkg != AMAZON_HOME && pkg != AMAZON_AMBIENT && !pkg.startsWith("com.amazon.tv.settings") && isApp(pkg))
+                Collections(this).used(pkg)
+        }
         // Amazon's screensaver started (inactivity in another app): cover it with ours
         if (event.packageName == AMAZON_AMBIENT && LauncherPrefs(this).screensaver) {
             startActivity(Intent(this, ScreensaverActivity::class.java)

@@ -466,6 +466,11 @@ class SettingsActivity : ComponentActivity() {
         header("Dock")
         row("Dock", "${apps.get(apps.dock()).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it) }
         row("Dock Sport", "${apps.get(apps.dock(true)).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it, sport = true) }
+        header("Righe e cartelle")
+        val col = Collections(this)
+        row("Le tue righe", col.rows.size.let { if (it == 0) "Nessuna" else "$it in Esplora" }) { v -> customRows(v) }
+        row("Cartelle", col.folders.size.let { if (it == 0) "Nessuna" else "$it" }) { v -> folders(v) }
+        note("Per mettere un'app in una riga o in una cartella: tieni premuto OK sull'app nella home.")
         header("App")
         row("App nascoste", apps.hiddenApps().size.let { if (it == 0) "Nessuna" else "$it app" }) { hiddenApps(it) }
         row("Rinomina un'app", "›") { v -> renamePick(v) }
@@ -593,6 +598,89 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         p.showUnder(anchor)
+    }
+
+    // ---------------------------------------------------------------- rows & folders
+
+    private fun customRows(anchor: View) {
+        val col = Collections(this)
+        val p = popup().title("Le tue righe", "Compaiono in Esplora, sotto Continua a guardare")
+        col.rows.forEach { r -> p.button("${r.name}  ·  ${r.apps.size} app") { rowActions(anchor, r.id) } }
+        p.gap()
+        p.button("＋  Nuova riga") {
+            askText(anchor, "Nome della riga", "") { name -> val r = col.createRow(name); build(); rowApps(rows[focusRow], r.id) }
+        }
+        p.showUnder(anchor)
+    }
+
+    private fun rowActions(anchor: View, id: String) {
+        val col = Collections(this)
+        val r = col.rows.firstOrNull { it.id == id } ?: return
+        val i = col.rows.indexOf(r)
+        val p = popup().title(r.name)
+        p.button("App nella riga…") { rowApps(anchor, id) }
+        p.button("Rinomina") { askText(anchor, "Nome della riga", r.name) { col.renameRow(id, it); build() } }
+        if (i > 0) p.button("↑ Sposta su") { col.moveRow(id, -1); build(); customRows(rows[focusRow]) }
+        if (i < col.rows.size - 1) p.button("↓ Sposta giù") { col.moveRow(id, +1); build(); customRows(rows[focusRow]) }
+        p.button("Elimina riga") { col.deleteRow(id); build() }
+        p.showUnder(anchor)
+    }
+
+    private fun rowApps(anchor: View, id: String) {
+        val col = Collections(this)
+        val r = col.rows.firstOrNull { it.id == id } ?: return
+        val p = popup().title(r.name, "OK per aggiungere o togliere un'app")
+        apps.all().filter { it.pkg != Apps.SETTINGS }.forEach { a ->
+            p.button(if (a.pkg in r.apps) "✓  ${a.label}" else a.label) {
+                col.toggleInRow(id, a.pkg)
+                build()
+                rowApps(rows[focusRow], id)
+            }
+        }
+        p.showUnder(anchor)
+    }
+
+    private fun folders(anchor: View) {
+        val col = Collections(this)
+        if (col.folders.isEmpty()) { toast("Nessuna cartella · tieni premuto OK su un'app nella home e scegli \"Metti in una cartella\""); return }
+        val p = popup().title("Cartelle")
+        col.folders.forEach { f ->
+            p.button("${f.name}  ·  ${f.apps.size} app") {
+                val q = popup().title(f.name)
+                q.button("Rinomina") { askText(anchor, "Nome della cartella", f.name) { col.renameFolder(f.id, it); build() } }
+                apps.get(f.apps).forEach { a -> q.button("Togli ${a.label}") { col.removeFromFolder(a.pkg); build() } }
+                q.button("Elimina cartella") { col.deleteFolder(f.id); build() }
+                q.showUnder(anchor)
+            }
+        }
+        p.showUnder(anchor)
+    }
+
+    private fun askText(anchor: View, title: String, initial: String, done: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(initial)
+            setSelection(initial.length)
+            hint = "Scrivi un nome"
+            setHintTextColor(0x80FFFFFF.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            setSingleLine()
+        }
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val p = popup().title(title).view(input)
+        p.onDismiss = { imm.hideSoftInputFromWindow(window.decorView.windowToken, 0) }
+        fun save() {
+            val v = input.text.toString().trim()
+            if (v.isEmpty()) return
+            imm.hideSoftInputFromWindow(input.windowToken, 0)
+            p.dismiss()
+            done(v)
+        }
+        input.setOnEditorActionListener { _, a, _ -> if (a == EditorInfo.IME_ACTION_DONE) { save(); true } else false }
+        p.button("Salva", keepOpen = true) { save() }
+        p.initialFocus = { input }
+        p.showUnder(anchor)
+        input.postDelayed({ imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_FORCED) }, 250)
     }
 
     private fun renamePick(anchor: View) {

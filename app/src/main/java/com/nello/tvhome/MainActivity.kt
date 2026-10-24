@@ -380,6 +380,8 @@ class MainActivity : ComponentActivity(), Host {
         findViewById<StatusIcon>(R.id.gearIcon).kind = StatusIcon.Kind.GEAR
         findViewById<StatusIcon>(R.id.vpnIcon).kind = StatusIcon.Kind.VPN
         findViewById<View>(R.id.settingsButton).setOnClickListener { showSettingsPopup() }
+        findViewById<StatusIcon>(R.id.recentsIcon).kind = StatusIcon.Kind.RECENTS
+        findViewById<View>(R.id.recentsButton).setOnClickListener { showRecents() }
         findViewById<StatusIcon>(R.id.btIcon).kind = StatusIcon.Kind.SPEAKER
         findViewById<View>(R.id.btButton).setOnClickListener { showHeadphonesPopup() }
         // headphones icon follows the connection
@@ -555,6 +557,30 @@ class MainActivity : ComponentActivity(), Host {
             }
         }
         p.showUnder(findViewById(R.id.vpnButton))
+    }
+
+    /** The app switcher: the apps you used last, one OK to go back to one. */
+    private fun showRecents() {
+        val recent = apps.get(collections.recents)
+        val anchor = findViewById<View>(R.id.recentsButton)
+        val dp = resources.displayMetrics.density
+        if (recent.isEmpty()) {
+            popup().apply { hero("App recenti", "Le app che apri compariranno qui"); showUnder(anchor) }
+            return
+        }
+        val p = GlassPopup(this, 560)
+        p.hero("App recenti", "${recent.size} app · la più recente per prima")
+        val list = RowList(this).apply {
+            layoutManager = StartAlignedLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL)
+            clipChildren = false; clipToPadding = false
+            setPadding((6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt())
+            adapter = CardsAdapter(Row("recents", "", RowKind.APPS, apps = recent), this@MainActivity)
+        }
+        p.view(list, (112 * dp).toInt())
+        p.gap()
+        p.button("Svuota l'elenco") { collections.recents = emptyList(); toast("Elenco svuotato") }
+        p.initialFocus = { list.getChildAt(0) }
+        p.showUnder(anchor)
     }
 
     /**
