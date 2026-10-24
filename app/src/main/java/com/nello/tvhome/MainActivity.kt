@@ -574,7 +574,7 @@ class MainActivity : ComponentActivity(), Host {
         val list = RowList(this).apply {
             layoutManager = StartAlignedLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL)
             clipChildren = false; clipToPadding = false
-            setPadding((6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt())
+            setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
             adapter = CardsAdapter(Row("recents", "", RowKind.APPS, apps = recent), this@MainActivity)
         }
         p.view(list, (112 * dp).toInt())
@@ -2313,7 +2313,7 @@ class MainActivity : ComponentActivity(), Host {
         val list = RowList(this).apply {
             layoutManager = StartAlignedLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL)
             clipChildren = false; clipToPadding = false
-            setPadding((6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt())
+            setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
             adapter = CardsAdapter(Row("folder", "", RowKind.APPS, apps = members), this@MainActivity)
         }
         p.view(list, (112 * dp).toInt())

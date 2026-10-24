@@ -182,20 +182,15 @@ class StatusIcon @JvmOverloads constructor(context: Context, attrs: AttributeSet
             canvas.drawArc(rect, -45f, 90f, false, stroke)
         }
     }
-    /** Recent apps: a card in front of another one. */
+    /** Recent apps: three stacked cards, the front one solid, the ones behind narrower. */
     private fun drawRecents(canvas: Canvas, s: Float, cx: Float, cy: Float) {
-        stroke.color = on
-        stroke.strokeWidth = s * 0.08f
-        val r = s * 0.07f
-        // the one behind: only its visible corner
-        rect.set(cx - s * 0.22f, cy - s * 0.36f, cx + s * 0.40f, cy + s * 0.10f)
-        canvas.save()
-        canvas.clipRect(cx - s * 0.10f, cy - s * 0.50f, cx + s * 0.50f, cy + s * 0.50f)
-        canvas.clipRect(cx - s * 0.40f, cy + s * 0.22f - s * 0.60f, cx + s * 0.27f, cy - s * 0.18f, android.graphics.Region.Op.DIFFERENCE)
-        canvas.drawRoundRect(rect, r, r, stroke)
-        canvas.restore()
+        val r = s * 0.06f
         fill.color = on
-        rect.set(cx - s * 0.40f, cy - s * 0.18f, cx + s * 0.22f, cy + s * 0.30f)
+        rect.set(cx - s * 0.38f, cy - s * 0.06f, cx + s * 0.38f, cy + s * 0.36f)
         canvas.drawRoundRect(rect, r, r, fill)
+        stroke.color = on
+        stroke.strokeWidth = s * 0.07f
+        canvas.drawLine(cx - s * 0.28f, cy - s * 0.20f, cx + s * 0.28f, cy - s * 0.20f, stroke)
+        canvas.drawLine(cx - s * 0.17f, cy - s * 0.34f, cx + s * 0.17f, cy - s * 0.34f, stroke)
     }
 }
