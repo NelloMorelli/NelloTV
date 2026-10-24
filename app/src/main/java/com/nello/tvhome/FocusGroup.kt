@@ -102,6 +102,8 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
             override fun onAnimationStart(a: android.animation.Animator) { cancelled = false }
             override fun onAnimationCancel(a: android.animation.Animator) { cancelled = true }
             override fun onAnimationEnd(a: android.animation.Animator) {
+                // settled: the item under the pill is drawn natively dark (crisp, real colours)
+                if (!cancelled) { updateInk(); invalidate() }
                 if (cancelled || !handoff) return
                 handoff = false
                 // settle on whatever is focused now (in case the focus moved during the hand-off)
@@ -207,11 +209,38 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         }
     }
 
-    /** Label/icon colour follows how much of the white pill is under it. */
-    /** Labels keep their own colours; the dark "ink" under the pill is a mask (see dispatchDraw). */
+    /**
+     * When the pill stands still on an item, that item is drawn natively in the "on pill"
+     * colour (text recoloured, icons in their focused version): crisp edges and real colours.
+     * Only while the pill slides is the dark ink a mask (see dispatchDraw).
+     */
+    private var directTarget: View? = null
+    private val savedColors = java.util.WeakHashMap<android.widget.TextView, Int>()
+
     private fun updateInk() {
-        for (child in buttons()) {
-            if (child is ViewGroup) (0 until child.childCount).map { child.getChildAt(it) }.filterIsInstance<StatusIcon>().forEach { it.ink = 0f }
+        val settled = !animator.isRunning && strength * visibleAmount > 0.99f
+        val target = if (settled) lastTarget else null
+        if (target === directTarget) return
+        directTarget?.let { inkDirect(it, false) }
+        directTarget = target
+        target?.let { inkDirect(it, true) }
+    }
+
+    /** A label's normal colour: applied now, or after the pill leaves it (if it's under the pill). */
+    fun setLabelColor(t: android.widget.TextView, color: Int) {
+        if (directTarget === t) savedColors[t] = color else t.setTextColor(color)
+    }
+
+    private fun inkDirect(v: View, on: Boolean) {
+        val views = if (v is ViewGroup) (0 until v.childCount).map { v.getChildAt(it) } + v else listOf(v)
+        views.forEach { c ->
+            when (c) {
+                is StatusIcon -> c.ink = if (on) 1f else 0f
+                is android.widget.TextView -> if (on) {
+                    savedColors[c] = c.currentTextColor
+                    c.setTextColor(Theme.onAccent)
+                } else savedColors.remove(c)?.let { c.setTextColor(it) }
+            }
         }
     }
 
@@ -253,7 +282,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         // the labels again, dark, but only inside the white pill: as it slides, each letter turns
         // dark exactly where the pill covers it
         val ink = strength * visibleAmount
-        if (showPill && ink > 0.01f) {
+        if (showPill && ink > 0.01f && directTarget == null) {
             inkFilter()
             inkPaint.alpha = (ink * 255).toInt()
             clip.reset()

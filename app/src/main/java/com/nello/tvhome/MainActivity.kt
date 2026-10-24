@@ -927,6 +927,7 @@ class MainActivity : ComponentActivity(), Host {
      * label's width and made the row jump). The colour change is a short crossfade.
      */
     private fun styleTabs(section: Section) {
+        val group = findViewById<FocusGroup>(R.id.tabGroup)
         tabs.forEachIndexed { i, t ->
             val sel = i == section.ordinal
             t.isSelected = sel
@@ -938,11 +939,11 @@ class MainActivity : ComponentActivity(), Host {
             val from = t.currentTextColor
             if (from != to) android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), from, to).apply {
                 duration = 480
-                addUpdateListener { a -> t.setTextColor(a.animatedValue as Int) }
+                addUpdateListener { a -> group.setLabelColor(t, a.animatedValue as Int) }
                 start()
             }
         }
-        findViewById<FocusGroup>(R.id.tabGroup).refresh()
+        group.refresh()
     }
 
     /**
