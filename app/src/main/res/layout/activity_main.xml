@@ -37,9 +37,13 @@
             android:layout_marginTop="22dp"
             android:layout_marginEnd="44dp">
 
+            <!-- tabs: centred on the header line like the menu pill; the first glyph sits on the
+                 page's 44dp column (the white pill may extend past it) -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="-15dp"
                 android:orientation="vertical">
 
                 <com.nello.tvhome.FocusGroup
@@ -328,8 +332,8 @@
                 android:id="@+id/carouselEyebrow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="46dp"
-                android:layout_marginEnd="46dp"
+                android:layout_marginStart="44dp"
+                android:layout_marginEnd="44dp"
                 android:layout_marginBottom="2dp"
                 android:ellipsize="end"
                 android:fontFamily="@font/poppins_medium"
@@ -345,8 +349,8 @@
                 android:id="@+id/carouselTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="46dp"
-                android:layout_marginEnd="46dp"
+                android:layout_marginStart="44dp"
+                android:layout_marginEnd="44dp"
                 android:ellipsize="end"
                 android:fontFamily="@font/poppins_medium"
                 android:maxLines="1"
@@ -359,8 +363,8 @@
                 android:id="@+id/carouselMeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="46dp"
-                android:layout_marginEnd="46dp"
+                android:layout_marginStart="44dp"
+                android:layout_marginEnd="44dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:shadowColor="#CC000000"

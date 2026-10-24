@@ -96,6 +96,9 @@ class CarouselAdapter(
         }
         if (item !is MediaItem) h.setExpanded(position == active, animate = false)
         h.itemView.setOnFocusChangeListener { v, has ->
+            // grows to the right and evenly up/down: the left edge stays on the page margin
+            v.pivotX = 0f
+            v.pivotY = v.height / 2f
             v.animate().scaleX(if (has) 1.04f else 1f).scaleY(if (has) 1.04f else 1f)
                 .setDuration(440).setInterpolator(DecelerateInterpolator(1.4f)).start()
             if (!has) return@setOnFocusChangeListener
