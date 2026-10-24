@@ -141,6 +141,7 @@ object Net {
                 else -> 3 * HOUR // trending, popular, now playing…
             }
             url.startsWith(BuildConfig.TOPX_BASE) -> 3 * HOUR
+            url.startsWith("https://www.bing.com/HPImageArchive") -> 3 * HOUR
             // standings and team lists change at most a few times a day
             path.endsWith("/standings") || path.endsWith("/teams") -> 30 * MIN
             else -> 0

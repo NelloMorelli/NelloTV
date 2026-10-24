@@ -73,6 +73,14 @@ class LauncherPrefs(context: Context) {
         set(v) = p.edit().putBoolean("night", v).apply()
 
     /** bumped every time a new local image is chosen, so the home screen reloads it */
+    /** "Le tue immagini a rotazione": the folder (MediaStore relative path) and how often it changes */
+    var rotationFolder: String?
+        get() = p.getString("rotationFolder", null)
+        set(v) = p.edit().putString("rotationFolder", v).apply()
+    var rotationMinutes: Int
+        get() = p.getInt("rotationMinutes", 60)
+        set(v) = p.edit().putInt("rotationMinutes", v).apply()
+
     var customVersion: Long
         get() = p.getLong("customVersion", 0)
         set(v) = p.edit().putLong("customVersion", v).apply()
@@ -92,6 +100,8 @@ class LauncherPrefs(context: Context) {
         val WALLPAPERS = listOf(
             "original" to "Travis Scott (originale)",
             "daily" to "Film o serie del giorno",
+            "bing" to "Foto del giorno (Bing)",
+            "rotation" to "Le tue immagini a rotazione",
             "black" to "Nero",
             "custom" to "Immagine dal dispositivo",
         )
@@ -334,12 +344,19 @@ class SettingsActivity : ComponentActivity() {
         header("Sfondo e schermo")
         row("Sfondo", LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) {
             val hasCustom = java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).exists()
-            val options = LauncherPrefs.WALLPAPERS.filter { (k, _) -> k != "custom" } +
+            val options = LauncherPrefs.WALLPAPERS.filter { (k, _) -> k != "custom" && (k != "rotation" || prefs.rotationFolder != null) } +
                 (if (hasCustom) listOf("custom" to "La tua immagine") else emptyList()) +
-                ("pick" to "Scegli immagine dal dispositivo…")
+                ("pick" to "Scegli immagine o cartella dal dispositivo…")
             choose(it, "Sfondo", options, prefs.wallpaper) { v ->
                 if (v == "pick") openPage(Intent(this, WallpaperPickerActivity::class.java)) else prefs.wallpaper = v
             }
+        }
+        if (prefs.wallpaper == "rotation") {
+            val mins = listOf(15 to "15 minuti", 30 to "30 minuti", 60 to "1 ora", 180 to "3 ore", 1440 to "Ogni giorno")
+            row("Cambia sfondo ogni", mins.firstOrNull { it.first == prefs.rotationMinutes }?.second ?: "${prefs.rotationMinutes} min") { v ->
+                pick(v, "Cambia sfondo ogni", mins.map { it.second }, mins.indexOfFirst { it.first == prefs.rotationMinutes }) { i -> prefs.rotationMinutes = mins[i].first }
+            }
+            row("Cartella", prefs.rotationFolder?.trimEnd('/')?.ifEmpty { "Memoria principale" } ?: "—") { openPage(Intent(this, WallpaperPickerActivity::class.java)) }
         }
         row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") {
             prefs.night = !prefs.night

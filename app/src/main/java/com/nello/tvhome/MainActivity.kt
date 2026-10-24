@@ -604,7 +604,12 @@ class MainActivity : ComponentActivity(), Host {
     /** Wallpaper from the settings screen. */
     private fun applyPrefs() {
         GlassView.night = prefs.night
-        val key = prefs.wallpaper + (if (prefs.wallpaper == "custom") prefs.customVersion.toString() else "") + (if (prefs.night) ":night" else "")
+        // rotation: which picture is due now (changes every rotationMinutes)
+        val slot = if (prefs.wallpaper == "rotation") System.currentTimeMillis() / (prefs.rotationMinutes * 60_000L) else 0L
+        val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+        val key = prefs.wallpaper + (if (prefs.wallpaper == "custom") prefs.customVersion.toString() else "") +
+            (if (prefs.wallpaper == "rotation") "${prefs.rotationFolder}:$slot" else "") + (if (prefs.wallpaper == "bing") day else "") +
+            (if (prefs.night) ":night" else "")
         if (key == appliedWallpaper) return
         appliedWallpaper = key
         lifecycleScope.launch {
@@ -617,6 +622,19 @@ class MainActivity : ComponentActivity(), Host {
                     )
                     (result.drawable as android.graphics.drawable.BitmapDrawable).bitmap
                 }.getOrElse { withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) } }
+                "bing" -> runCatching {
+                    val js = org.json.JSONObject(Net.get("https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=it-IT"))
+                    val url = "https://www.bing.com" + js.getJSONArray("images").getJSONObject(0).getString("url")
+                    val result = coil.ImageLoader(this@MainActivity).execute(
+                        coil.request.ImageRequest.Builder(this@MainActivity).data(url).allowHardware(false).build()
+                    )
+                    (result.drawable as android.graphics.drawable.BitmapDrawable).bitmap
+                }.getOrElse { withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) } }
+                "rotation" -> withContext(Dispatchers.IO) {
+                    val pics = prefs.rotationFolder?.let { WallpaperPickerActivity.folderImages(this@MainActivity, it) }.orEmpty()
+                    pics.getOrNull((slot % pics.size.coerceAtLeast(1)).toInt())?.let { WallpaperPickerActivity.decodeScaled(this@MainActivity, it) }
+                        ?: BitmapFactory.decodeResource(resources, R.drawable.wallpaper)
+                }
                 "custom" -> withContext(Dispatchers.IO) {
                     BitmapFactory.decodeFile(java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).path)
                         ?: BitmapFactory.decodeResource(resources, R.drawable.wallpaper)
@@ -624,7 +642,15 @@ class MainActivity : ComponentActivity(), Host {
                 else -> withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) }
             }
             val composed = withContext(Dispatchers.Default) { composeBackground(source) }
-            findViewById<ImageView>(R.id.wallpaper).setImageBitmap(composed)
+            // a soft crossfade from the old wallpaper to the new one
+            val wv = findViewById<ImageView>(R.id.wallpaper)
+            val old = wv.drawable
+            if (old != null && old.intrinsicWidth > 0) {
+                val fade = android.graphics.drawable.TransitionDrawable(arrayOf(old, android.graphics.drawable.BitmapDrawable(resources, composed)))
+                fade.isCrossFadeEnabled = true
+                wv.setImageDrawable(fade)
+                fade.startTransition(1200)
+            } else wv.setImageBitmap(composed)
             setGlass(source)
             // the screensaver shows this exact background (wallpaper, no UI)
             withContext(Dispatchers.IO) {
@@ -833,6 +859,8 @@ class MainActivity : ComponentActivity(), Host {
         scheduleNightly()
         // back from Sportio: the VPN we switched on goes off again
         Sportio.wireguardDownIfOurs(this)
+        idleHandler.removeCallbacks(wallpaperTick)
+        idleHandler.postDelayed(wallpaperTick, 60_000)
         // first-start setup not finished (new Fire TV, or Home pressed during it): it comes first
         if (!prefs.onboarded) {
             startActivity(Intent(this, OnboardingActivity::class.java))
@@ -1368,6 +1396,14 @@ class MainActivity : ComponentActivity(), Host {
     }
 
     private val nightly = Runnable { dailyRefresh() ; scheduleNightly() }
+
+    /** Rotating / daily wallpapers: look every minute whether a new one is due. */
+    private val wallpaperTick = object : Runnable {
+        override fun run() {
+            if (inForeground && prefs.wallpaper in setOf("rotation", "bing")) applyPrefs()
+            idleHandler.postDelayed(this, 60_000)
+        }
+    }
 
     private fun scheduleNightly() {
         val next = java.util.Calendar.getInstance(rome).apply {

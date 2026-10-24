@@ -252,6 +252,10 @@ class PageScroller(context: android.content.Context) : ScrollView(context) {
     }
 
     private fun follow(v: View) {
+        // posted: by now the row may have been rebuilt (a setting changed) and be gone
+        var x: android.view.ViewParent? = v.parent
+        while (x != null && x !== this) x = x.parent
+        if (x == null || !v.isAttachedToWindow) return
         val r = Rect()
         v.getDrawingRect(r)
         offsetDescendantRectToMyCoords(v, r)

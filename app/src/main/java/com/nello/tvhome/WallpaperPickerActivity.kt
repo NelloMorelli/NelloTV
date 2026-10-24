@@ -57,6 +57,25 @@ class WallpaperPickerActivity : GlassPage() {
                 return@launch
             }
             var first: android.view.View? = null
+            // whole folders, for "Le tue immagini a rotazione"
+            val folders = pics.groupBy { it.folder }.filter { it.value.size >= 2 }
+            if (folders.isNotEmpty()) {
+                header("A rotazione")
+                folders.forEach { (folder, list) ->
+                    val row = item("Usa la cartella ${folder.substringAfterLast('/').ifEmpty { "principale" }}", "${list.size} immagini") {
+                        LauncherPrefs(this@WallpaperPickerActivity).apply { rotationFolder = folder; wallpaper = "rotation" }
+                        Toast.makeText(this@WallpaperPickerActivity, "Sfondo a rotazione: ${list.size} immagini", Toast.LENGTH_SHORT).show()
+                        finish()
+                    } as LinearLayout
+                    row.addView(ImageView(this@WallpaperPickerActivity).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        load(list.first().uri) { size(320, 180) }
+                    }, 0, LinearLayout.LayoutParams(dp(128), dp(72)).apply { marginEnd = dp(16) })
+                    row.gravity = Gravity.CENTER_VERTICAL
+                    if (first == null) first = row
+                }
+                header("Una sola immagine")
+            }
             pics.forEach { pic ->
                 val row = item(pic.name, pic.folder) { choose(pic) } as LinearLayout
                 row.addView(ImageView(this@WallpaperPickerActivity).apply {
@@ -120,5 +139,25 @@ class WallpaperPickerActivity : GlassPage() {
 
     companion object {
         const val CUSTOM_FILE = "wallpaper_custom.jpg"
+
+        /** The pictures of a folder (MediaStore relative path), by name. */
+        fun folderImages(c: android.content.Context, folder: String): List<Uri> {
+            val out = mutableListOf<Uri>()
+            c.contentResolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
+                "${MediaStore.Images.Media.RELATIVE_PATH} = ?", arrayOf("$folder/"), "${MediaStore.Images.Media.DISPLAY_NAME} ASC",
+            )?.use { cur -> while (cur.moveToNext()) out += ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cur.getLong(0)) }
+            return out
+        }
+
+        /** Decode about screen size. */
+        fun decodeScaled(c: android.content.Context, uri: Uri): Bitmap? = runCatching {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            c.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, bounds) }
+            val dm = c.resources.displayMetrics
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= dm.widthPixels && bounds.outHeight / (sample * 2) >= dm.heightPixels) sample *= 2
+            c.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
+        }.getOrNull()
     }
 }
