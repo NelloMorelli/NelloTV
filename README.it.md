@@ -9,6 +9,21 @@
   <a href="README.md">English</a> · <b>Italiano</b>
 </p>
 
+## Schermate
+
+<p align="center"><i>Locandine, immagini dei canali e loghi delle altre app sono sfocati: le immagini mostrano solo il launcher.</i></p>
+
+| | |
+|---|---|
+| ![Esplora](docs/screenshots/home.jpg) | ![Serie TV](docs/screenshots/series.jpg) |
+| **Esplora** — il carosello *Per te* e il dock, sullo sfondo *Nero luminoso* che si illumina col colore della card selezionata | **Film / Serie TV** — un carosello per catalogo, pallini a sinistra |
+| ![TV](docs/screenshots/tv.jpg) | ![Sport](docs/screenshots/sport.jpg) |
+| **TV** — cosa c'è in onda ora, col logo di ogni canale | **Sport** — partite di oggi e sessioni di F1, il dock sport |
+| ![Apps](docs/screenshots/apps.jpg) | ![Personalizza](docs/screenshots/customize.jpg) |
+| **Griglia delle app** — riquadri grandi e piccoli, ordine libero con *Sposta* | **Personalizza** — nome, immagine (anche cercata online), dimensione, cartella, righe |
+
+<p align="center"><img src="docs/screenshots/settings.jpg" alt="Impostazioni" width="70%"><br><b>Impostazioni</b> — sezioni a sinistra, opzioni a destra</p>
+
 ---
 
 ## Indice
@@ -46,7 +61,10 @@ Nello TV prende il posto della home di Amazon su una Fire TV Stick (provato su F
 
 **Navigazione**
 - Un grande carosello per scheda; **↑ / ↓** passano da un catalogo all'altro (i pallini a sinistra indicano dove sei), **↑** sul primo porta al menu in alto, **↓** sull'ultimo porta al dock. **Indietro** riporta sempre al menu in alto.
-- Un **dock** di cinque app in basso (uno a parte per la scheda Sport), modificabile tenendo premuto su un'app.
+- Un **dock** in basso con tutte le app che ci stanno in larghezza (7 a grandezza normale, 6 grandi, 8 piccole), più uno a parte per la scheda Sport.
+- **Tieni premuto OK** su un'app per un menu breve: *Apri*, *Sposta* (la porti dove vuoi nel dock o nella griglia con le frecce: i riquadri scivolano al loro posto e la pagina la segue), aggiungi o togli dal dock, *Personalizza…*, *Nascondi*.
+- **Personalizza…** — rinomina, cambia immagine (una foto sulla Fire TV, oppure alternative trovate online su Google Play: icona HD, copertina del trailer, screenshot), dimensione nella griglia, cartella, righe personalizzate, app sport.
+- In ogni pop-up, **↑** quando sopra non c'è niente lo chiude e torna al suo pulsante.
 
 **Menu in alto a destra**
 - 🛡 stato della **VPN** e IP pubblico · 📶 **rete**, segnale e ping · 🔊 **uscita audio** (TV o cuffie Bluetooth, un tasto per cambiare) · ⚙ **impostazioni**.
@@ -54,7 +72,10 @@ Nello TV prende il posto della home di Amazon su una Fire TV Stick (provato su F
 **Aspetto**
 - Interfaccia in vetro smerigliato sopra il tuo sfondo, selettore "liquido", pop-up che nascono dal pulsante premuto, font **Poppins**.
 - **Salvaschermo sempre acceso**: lo sfondo si scurisce e compare un orologio in vetro liquido, che si sposta un poco ogni minuto per non rovinare lo schermo.
-- Tutto personalizzabile: colore principale, intensità del vetro, sfondo (incluso o una tua immagine), angoli, dimensione delle card, schede e cataloghi visibili, nomi delle app, modalità notte.
+- **Nero luminoso** (lo sfondo predefinito): nero, illuminato piano col colore di ciò che è selezionato, con una sottile lastra di vetro illuminato attorno.
+- Altri sfondi: film o serie del giorno, foto del giorno di Bing, una tua immagine o una cartella a rotazione, nero.
+- Le app senza banner orizzontale ricevono una copertina disegnata col colore della loro icona.
+- Personalizzabile: colore principale, intensità del vetro, dimensione dell'interfaccia, schede e cataloghi visibili, nomi e immagini delle app, modalità notte, suoni di navigazione.
 
 **Extra**
 - Avviso 10 minuti prima delle partite della tua squadra e delle sessioni della tua scuderia, sopra qualsiasi app: **OK** sul banner per guardarla.
@@ -99,7 +120,7 @@ Su una Fire TV nuova, Nello TV si apre con una breve configurazione. Finché non
 4. **Canali in Sportio** — scegli il numero della playlist e premilo: Sportio dovrebbe aprire RAI 1. Se invece apre la lista dei canali, premi Home e prova il numero successivo.
 5. **Nuvio** — accedi con il QR, oppure salta.
 
-Puoi rifarla da **Impostazioni → Generale → Configurazione iniziale**.
+Puoi rifarla da **Impostazioni → Account → Configurazione iniziale**.
 
 ## Come si usa
 
@@ -110,21 +131,22 @@ Puoi rifarla da **Impostazioni → Generale → Configurazione iniziale**.
 | Carosello | ← → | scorre i titoli (in fondo riparte dall'inizio) |
 | Carosello | ↑ / ↓ | catalogo precedente / successivo; oltre il primo → menu in alto, oltre l'ultimo → dock |
 | Ovunque | Indietro | menu in alto |
-| App | tieni premuto OK o ☰ | menu dell'app: sposta, aggiungi o togli dal dock, nascondi |
+| App | tieni premuto OK o ☰ | menu dell'app: apri, sposta, dock, personalizza, nascondi |
 | Partita | tieni premuto OK o ☰ | pagina della partita (formazioni, eventi) |
-| Pop-up | ↑ sulla prima riga | lo chiude e torna al suo pulsante |
+| Pop-up | ↑ quando sopra non c'è niente | lo chiude e torna al suo pulsante |
 
 ## Impostazioni
 
 Si aprono da ⚙ → **Impostazioni del launcher**: una schermata intera con le sezioni a sinistra e le opzioni a destra.
 
-- **Generale** — sfondo, modalità notte, salvaschermo (acceso/spento, dopo quanto, prova), avvisi, aggiornamenti, configurazione iniziale.
-- **Aspetto** — colore principale, vetro, oscura lo sfondo, angoli, dimensione card, velocità delle animazioni.
-- **Schermata** — scheda iniziale, dock e info sotto le card, quali schede e cataloghi mostrare.
-- **Dock e app** — dock, dock Sport, app nascoste, rinomina le app.
-- **Sport e TV** — squadra del cuore, scuderia F1, playlist Sportio (con prova), WireGuard per lo sport, app VPN.
-- **Account** — Nuvio Sync.
+- **Aspetto** — sfondo, modalità notte, colore principale, vetro, dimensione dell'interfaccia, suoni di navigazione.
+- **Home** — scheda iniziale, schede e cataloghi visibili, info sulle card, squadra del cuore e scuderia F1, prova di un avviso.
+- **App e dock** — dock e dock Sport, dimensione e nomi nel dock, ordine della griglia, righe personalizzate, cartelle, app nascoste.
+- **Salvaschermo** — acceso/spento, dopo quanto, widget (partita, F1, notizie e relative fonti), prova.
+- **Sport e TV** — playlist Sportio (sceglierla la prova), WireGuard per lo sport, app VPN.
+- **Account** — Nuvio Sync, backup e ripristino, configurazione iniziale.
 - **Fire TV** — *Nello TV come home*, *Apri la home di Amazon*, scorciatoie alle impostazioni della Fire TV.
+- **Info** — versione di Nello TV e controllo aggiornamenti, modello della Fire TV, memoria e RAM libere.
 
 ## Sport, Sportio e WireGuard
 
@@ -134,7 +156,7 @@ Si aprono da ⚙ → **Impostazioni del launcher**: una schermata intera con le 
 
 ## Aggiornamenti
 
-Ogni release di questo repository contiene l'APK. Nello TV controlla se ce n'è una più nuova all'avvio e in ⚙ (l'intestazione dice *aggiornato* o la nuova versione); un OK la scarica e la installa.
+Ogni release di questo repository contiene l'APK. Nello TV controlla se ce n'è una più nuova all'avvio e in Impostazioni → Info → *Aggiornamenti*; un OK la scarica e la installa.
 
 Il controllo confronta il **numero di build** (il tag della release, `v59`), quindi il nome della versione può restare lo stesso tra una release e l'altra.
 
@@ -194,7 +216,7 @@ app/src/main/java/com/nello/tvhome/
 | Home apre la home di Amazon | Il servizio di Nello TV è spento: Impostazioni Fire TV → Accessibilità → Nello TV → attiva (o rifai la configurazione iniziale). |
 | Una partita apre la lista dei canali di Sportio invece del canale | Numero di playlist sbagliato: Impostazioni → Sport e TV → *Playlist Sportio*, prova con *Prova: apri RAI 1*. |
 | WireGuard non si accende | Attiva *Consenti app di controllo remoto* in WireGuard e concedi il permesso che Nello TV chiede. |
-| Niente salvaschermo | Attiva il salvaschermo della Fire TV (Impostazioni Fire TV → Schermo e audio) e quello di Nello TV (Impostazioni → Generale). |
+| Niente salvaschermo | Attiva il salvaschermo della Fire TV (Impostazioni Fire TV → Schermo e audio) e quello di Nello TV (Impostazioni → Salvaschermo). |
 | Gli aggiornamenti non si installano | Consenti le "app di origine sconosciuta" per Nello TV. |
 
 ---

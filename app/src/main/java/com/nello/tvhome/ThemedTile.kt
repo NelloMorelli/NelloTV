@@ -42,7 +42,7 @@ object ThemedTile {
     }
 
     /** The icon's main colour: the average hue of its vivid pixels (grey icons get a slate blue). */
-    private fun dominant(icon: Bitmap): Int {
+    fun dominant(icon: Bitmap): Int {
         val small = Bitmap.createScaledBitmap(icon, 24, 24, true)
         var x = 0.0; var y = 0.0; var weight = 0.0; var sat = 0.0; var n = 0
         val hsv = FloatArray(3)
@@ -67,8 +67,10 @@ object ThemedTile {
         return Color.HSVToColor(hsv)
     }
 
-    private fun draw(c: Context, label: String, icon: Drawable): Bitmap {
-        val ic = iconBitmap(icon, 256)
+    private fun draw(c: Context, label: String, icon: Drawable): Bitmap = cover(label, iconBitmap(icon, 256))
+
+    /** The themed cover from an icon picture (also used with HD icons found online). */
+    fun cover(label: String, ic: Bitmap): Bitmap {
         val base = dominant(ic)
         val out = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
         val cv = Canvas(out)
@@ -101,5 +103,27 @@ object ThemedTile {
         while (t.measureText(name) > W - 80 && name.length > 4) name = name.dropLast(2) + "…"
         cv.drawText(name, W / 2f, H * 0.82f, t)
         return out
+    }
+
+    /**
+     * The icon filling the cover the way Fire TV banners do: centred on the colour of its own
+     * edge (so the picture and the background read as one surface).
+     */
+    fun onEdgeColour(ic: Bitmap): Bitmap {
+        val edge = ic.getPixel(ic.width / 2, (ic.height * 0.04f).toInt()).let { if (Color.alpha(it) < 200) Color.WHITE else it or 0xFF000000.toInt() }
+        val out = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(out)
+        cv.drawColor(edge)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val s = H * 0.86f
+        cv.drawBitmap(ic, null, android.graphics.RectF(W / 2f - s / 2, H / 2f - s / 2, W / 2f + s / 2, H / 2f + s / 2), p)
+        return out
+    }
+
+    /** Centre crop to 16:9 at the tile size. */
+    fun crop(src: Bitmap): Bitmap {
+        val h = minOf(src.height, src.width * 9 / 16)
+        val w = h * 16 / 9
+        return Bitmap.createScaledBitmap(Bitmap.createBitmap(src, (src.width - w) / 2, (src.height - h) / 2, w, h), W, H, true)
     }
 }

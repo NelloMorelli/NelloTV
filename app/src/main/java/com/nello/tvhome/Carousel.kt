@@ -297,8 +297,13 @@ class CarouselAdapter(
                     background = GradientDrawable().apply { setColor(0xCC000000.toInt()); cornerRadius = 10 * dp }
                     setPadding(px(10), px(6), px(12), px(6))
                 }
-                tvLogo = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-                head.addView(tvLogo, LinearLayout.LayoutParams(px(44), px(26)).apply { marginEnd = px(6) })
+                // the logo at its own shape (Sky's are very wide): fixed height, width as needed
+                tvLogo = ImageView(ctx).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    adjustViewBounds = true
+                    maxWidth = px(170)
+                }
+                head.addView(tvLogo, LinearLayout.LayoutParams(-2, px(22)))
                 tvChannel = TextView(ctx).apply {
                     textSize = 13f
                     typeface = Fonts.medium
@@ -577,8 +582,15 @@ class CarouselAdapter(
             tvChannel.text = t.channel.name
             tvLogo.dispose()
             tvLogo.setImageDrawable(null)
-            tvLogo.visibility = if (t.channel.logo != null) View.VISIBLE else View.GONE
-            t.channel.logo?.let { tvLogo.load(it) }
+            tvLogo.visibility = View.GONE
+            tvChannel.visibility = View.VISIBLE
+            // full resolution (Sky's are requested at 80 px): the logo alone; the name only without one
+            t.channel.logo?.let { url ->
+                tvLogo.load(url.replace(Regex("\\?tr=n-logo_\\d+"), "")) {
+                    size(coil.size.Size(px(340), px(44)))
+                    listener(onSuccess = { _, _ -> tvLogo.visibility = View.VISIBLE; tvChannel.visibility = View.GONE })
+                }
+            }
             tvTitle.text = t.title
             tvTime.text = "${TvGuide.time(t.start)} – ${TvGuide.time(t.stop)}" + (t.category?.let { " · $it" } ?: "")
             tvTrack.visibility = if (t.isOn) View.VISIBLE else View.GONE

@@ -23,9 +23,10 @@ import kotlinx.coroutines.launch
 class LauncherPrefs(context: Context) {
     private val p = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
-    /** "original", "daily" (TMDB backdrop of the day) or "black" */
+    /** "glow" (black, lit by the focus), "daily", "bing", "rotation", "black" or "custom" */
     var wallpaper: String
-        get() = p.getString("wallpaper", "original")!!
+        // the old built-in picture is gone: it becomes the lit black
+        get() = p.getString("wallpaper", "glow")!!.let { if (it == "original") "glow" else it }
         set(v) = p.edit().putString("wallpaper", v).apply()
 
     /** always-on screensaver (wallpaper + clock) instead of Amazon's */
@@ -98,7 +99,7 @@ class LauncherPrefs(context: Context) {
         val VPN_APPS = listOf("ch.protonvpn.android" to "ProtonVPN", "com.wireguard.android" to "WireGuard")
         val TABS = listOf("EXPLORE" to "Esplora", "MOVIES" to "Film", "SERIES" to "Serie TV", "TV" to "TV", "SPORT" to "Sport", "SEARCH" to "Cerca")
         val WALLPAPERS = listOf(
-            "original" to "Travis Scott (originale)",
+            "glow" to "Nero luminoso",
             "daily" to "Film o serie del giorno",
             "bing" to "Foto del giorno (Bing)",
             "rotation" to "Le tue immagini a rotazione",
@@ -130,7 +131,7 @@ class SettingsActivity : ComponentActivity() {
     /** which option to focus after a rebuild */
     private var focusRow = -1
 
-    private val sections = listOf("Generale", "Aspetto", "Schermata", "Dock e app", "Sport e TV", "Account e backup", "Fire TV")
+    private val sections = listOf("Aspetto", "Home", "App e dock", "Salvaschermo", "Sport e TV", "Account", "Fire TV", "Info")
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -144,7 +145,7 @@ class SettingsActivity : ComponentActivity() {
         // the wallpaper, blurred and dimmed: the same mood as the home, but a screen of its own
         val back = android.widget.ImageView(this).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-            GlassView.blurred?.let { setImageBitmap(it) } ?: setImageResource(R.drawable.wallpaper)
+            GlassView.blurred?.let { setImageBitmap(it) }
         }
         val veil = View(this).apply { setBackgroundColor(0xA6000000.toInt()) }
 
@@ -329,13 +330,14 @@ class SettingsActivity : ComponentActivity() {
         rows.clear()
         Theme.load(this)
         when (section) {
-            0 -> general()
-            1 -> look()
-            2 -> screen()
-            3 -> dockAndApps()
+            0 -> look()
+            1 -> home()
+            2 -> dockAndApps()
+            3 -> screensaver()
             4 -> sportAndTv()
             5 -> account()
             6 -> fireTv()
+            7 -> info()
         }
         if (hadFocus || focusRow >= 0) rows.getOrNull(focusRow.coerceAtLeast(0))?.let { r -> r.post { r.requestFocus() } }
         if (animate) {
@@ -347,9 +349,12 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    private fun general() {
-        header("Sfondo e schermo")
-        row("Sfondo", LauncherPrefs.WALLPAPERS.first { it.first == prefs.wallpaper }.second) {
+    // ---------------------------------------------------------------- sections
+    // Only what you change: the rest has a sensible default and doesn't need a row.
+
+    private fun look() {
+        header("Sfondo")
+        row("Sfondo", LauncherPrefs.WALLPAPERS.firstOrNull { it.first == prefs.wallpaper }?.second ?: "Nero luminoso") {
             val hasCustom = java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).exists()
             val options = LauncherPrefs.WALLPAPERS.filter { (k, _) -> k != "custom" && (k != "rotation" || prefs.rotationFolder != null) } +
                 (if (hasCustom) listOf("custom" to "La tua immagine") else emptyList()) +
@@ -363,76 +368,9 @@ class SettingsActivity : ComponentActivity() {
             row("Cambia sfondo ogni", mins.firstOrNull { it.first == prefs.rotationMinutes }?.second ?: "${prefs.rotationMinutes} min") { v ->
                 pick(v, "Cambia sfondo ogni", mins.map { it.second }, mins.indexOfFirst { it.first == prefs.rotationMinutes }) { i -> prefs.rotationMinutes = mins[i].first }
             }
-            row("Cartella", prefs.rotationFolder?.trimEnd('/')?.ifEmpty { "Memoria principale" } ?: "—") { openPage(Intent(this, WallpaperPickerActivity::class.java)) }
         }
-        row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") {
-            prefs.night = !prefs.night
-            build()
-        }
-        row("Suoni di navigazione", if (NavSound.enabled) "Attivi" else "Spenti") {
-            NavSound.enabled = !NavSound.enabled
-            Theme.edit(this).putBoolean("navSounds", NavSound.enabled).apply()
-            build()
-        }
-        header("Salvaschermo")
-        row("Salvaschermo", if (prefs.screensaver) "Sfondo e orologio" else "Quello di Amazon") {
-            prefs.screensaver = !prefs.screensaver
-            build()
-        }
-        val waits = listOf(2, 5, 10, 15, 30)
-        val wait = runCatching { Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT) / 60_000 }.getOrDefault(5)
-        row("Parte dopo", "$wait minuti") { v ->
-            pick(v, "Salvaschermo dopo", waits.map { "$it minuti" }, waits.indexOf(wait)) { i ->
-                runCatching { Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, waits[i] * 60_000) }
-                    .onFailure { toast("Permesso mancante per cambiare il tempo") }
-            }
-        }
-        row("Widget del salvaschermo", listOf("match" to "Partita", "f1" to "F1", "news" to "Notizie").filter { ScreensaverView.enabled(this, it.first) }.joinToString(" · ") { it.second }.ifEmpty { "Nessuno" }) { v ->
-            val p = popup().title("Widget del salvaschermo", "In basso, sotto l'orologio")
-            listOf("match" to "Prossima partita della tua squadra", "f1" to "Prossima sessione di F1", "news" to "Notizie").forEach { (k, n) ->
-                p.button(if (ScreensaverView.enabled(this, k)) "✓  $n" else n) {
-                    Theme.edit(this).putBoolean("ss_$k", !ScreensaverView.enabled(this, k)).apply(); build()
-                }
-            }
-            p.showUnder(v)
-        }
-        row("Fonti delle notizie", News.chosen(this).size.let { "$it fonti" }) { v -> newsFeeds(v) }
-        row("Prova salvaschermo", "›") {
-            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_SCREENSAVER))
-            finish()
-        }
-        header("Avvisi e aggiornamenti")
-        row("Notifiche", "Napoli · Ferrari · nuovi episodi") {
-            val p = popup().title("Notifiche", "Banner sopra qualsiasi app: Napoli e Ferrari 10 minuti prima, nuovi episodi delle serie che segui.")
-            p.button("Prova notifica") {
-                finish()
-                window.decorView.postDelayed({ WakeService.testBanner() }, 600)
-            }
-            p.showUnder(it)
-        }
-        row("Configurazione iniziale", "Permessi, squadra, canali ›") {
-            // until it's finished again, Home brings it back
-            prefs.onboarded = false
-            prefs.onboardingStep = 0
-            startActivity(Intent(this, OnboardingActivity::class.java))
-        }
-        row("Aggiornamenti", "Versione ${Updater.name()}") {
-            // the check runs on the home screen, where its pop-up lives
-            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_CHECK_UPDATE))
-            finish()
-        }
-    }
-
-    private fun look() {
-        header("Dimensioni")
-        row("Dimensione interfaccia", UiScale.OPTIONS.firstOrNull { it.first == UiScale.factor(this) }?.second ?: "${(UiScale.factor(this) * 100).toInt()}%") { v ->
-            pick(v, "Dimensione interfaccia", UiScale.OPTIONS.map { it.second }, UiScale.OPTIONS.indexOfFirst { it.first == UiScale.factor(this) }) { i ->
-                Theme.edit(this).putFloat("uiScale", UiScale.OPTIONS[i].first).apply()
-                // this screen too, right away
-                recreate()
-            }
-        }
-        header("Colori e vetro")
+        row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") { prefs.night = !prefs.night; build() }
+        header("Stile")
         row("Colore principale", Theme.ACCENTS.firstOrNull { it.second == Theme.accent }?.first ?: "Personalizzato") { v ->
             pick(v, "Colore principale", Theme.ACCENTS.map { it.first }, Theme.ACCENTS.indexOfFirst { it.second == Theme.accent }) { i ->
                 Theme.edit(this).putInt("accent", Theme.ACCENTS[i].second).apply()
@@ -440,106 +378,33 @@ class SettingsActivity : ComponentActivity() {
         }
         val glass = listOf("Leggero", "Normale", "Intenso")
         row("Effetto vetro", glass[Theme.glass]) { v -> pick(v, "Effetto vetro", glass, Theme.glass) { Theme.edit(this).putInt("glass", it).apply() } }
-        val dims = listOf(0f, 0.15f, 0.3f, 0.45f, 0.6f)
-        val dimNames = listOf("Nessuno", "Leggero", "Medio", "Forte", "Molto forte")
-        row("Oscura lo sfondo", dimNames[dims.indexOfFirst { it >= Theme.dim - 0.01f }.coerceAtLeast(0)]) { v ->
-            pick(v, "Oscura lo sfondo", dimNames, dims.indexOfFirst { it >= Theme.dim - 0.01f }) { Theme.edit(this).putFloat("dim", dims[it]).apply() }
-        }
-        header("Forme")
-        val rounds = listOf(0.4f, 1f, 1.6f)
-        val roundNames = listOf("Squadrati", "Normali", "Molto arrotondati")
-        row("Angoli", roundNames[rounds.indexOf(Theme.roundness).coerceAtLeast(0)]) { v ->
-            pick(v, "Angoli", roundNames, rounds.indexOf(Theme.roundness)) { Theme.edit(this).putFloat("roundness", rounds[it]).apply() }
-        }
-        val sizes = listOf(0.85f, 1f, 1.12f)
-        val sizeNames = listOf("Compatte", "Normali", "Grandi")
-        row("Dimensione card", sizeNames[sizes.indexOf(Theme.cardScale).coerceAtLeast(0)]) { v ->
-            pick(v, "Dimensione card", sizeNames, sizes.indexOf(Theme.cardScale)) { Theme.edit(this).putFloat("cardScale", sizes[it]).apply() }
-        }
-        header("Movimento")
-        val speeds = listOf(0f, 0.35f, 0.5f, 0.8f)
-        val speedNames = listOf("Disattivate", "Veloci", "Normali", "Lente")
-        val cur = runCatching { Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE) }.getOrDefault(0.5f)
-        row("Animazioni", speedNames[speeds.indexOfFirst { Math.abs(it - cur) < 0.05f }.coerceAtLeast(2)]) { v ->
-            pick(v, "Animazioni", speedNames, speeds.indexOfFirst { Math.abs(it - cur) < 0.05f }) { i ->
-                runCatching {
-                    listOf(Settings.Global.ANIMATOR_DURATION_SCALE, Settings.Global.TRANSITION_ANIMATION_SCALE, Settings.Global.WINDOW_ANIMATION_SCALE)
-                        .forEach { k -> Settings.Global.putFloat(contentResolver, k, speeds[i]) }
-                }.onFailure { toast("Permesso mancante per cambiare le animazioni") }
+        row("Dimensione interfaccia", UiScale.OPTIONS.firstOrNull { it.first == UiScale.factor(this) }?.second ?: "${(UiScale.factor(this) * 100).toInt()}%") { v ->
+            pick(v, "Dimensione interfaccia", UiScale.OPTIONS.map { it.second }, UiScale.OPTIONS.indexOfFirst { it.first == UiScale.factor(this) }) { i ->
+                Theme.edit(this).putFloat("uiScale", UiScale.OPTIONS[i].first).apply()
+                recreate()
             }
         }
-        header("")
-        row("Ripristina l'aspetto", "›") {
-            val e = Theme.edit(this)
-            listOf("accent", "glass", "dim", "roundness", "cardScale").forEach { k -> e.remove(k) }
-            e.apply()
-            toast("Aspetto ripristinato")
+        row("Suoni di navigazione", if (NavSound.enabled) "Attivi" else "Spenti") {
+            NavSound.enabled = !NavSound.enabled
+            Theme.edit(this).putBoolean("navSounds", NavSound.enabled).apply()
             build()
         }
     }
 
-    private fun screen() {
-        header("All'avvio")
+    private fun home() {
+        header("Schede")
         row("Scheda iniziale", LauncherPrefs.TABS.first { it.first == prefs.startTab }.second) {
             choose(it, "Scheda iniziale", LauncherPrefs.TABS, prefs.startTab) { v -> prefs.startTab = v }
         }
-        header("Sullo schermo")
-        toggle("Dock", "showDock", Theme.showDock)
-        toggle("Titolo e info sotto le card", "showCardInfo", Theme.showCardInfo)
-        header("Schede")
         val hiddenT = Customize.hiddenTabs(this)
-        Customize.TABS.forEach { (key, name) ->
-            row(name, if (key in hiddenT) "Nascosta" else "Visibile") {
-                Theme.edit(this).putStringSet("hiddenTabs", if (key in hiddenT) hiddenT - key else hiddenT + key).apply()
-                build()
-            }
-        }
-        header("Cataloghi")
+        row("Schede visibili", "${Customize.TABS.size - hiddenT.count { h -> Customize.TABS.any { it.first == h } } + 1} di ${Customize.TABS.size + 1}") { v -> tabsPicker(v) }
         val hiddenC = Customize.hiddenCatalogs(this)
-        Customize.CATALOGS.forEach { (tab, cats) ->
-            val off = cats.count { it.first in hiddenC }
-            row(tab, if (off == 0) "Tutti visibili" else "$off nascosti") { v -> catalogs(v, tab, cats) }
+        row("Cataloghi", if (hiddenC.isEmpty()) "Tutti visibili" else "${hiddenC.size} nascosti") { v ->
+            val p = popup().title("Cataloghi", "Scegli una scheda")
+            Customize.CATALOGS.forEach { (tab, cats) -> p.button("$tab  ·  ${cats.count { it.first !in hiddenC }}/${cats.size}") { catalogs(v, tab, cats) } }
+            p.showUnder(v)
         }
-    }
-
-    private fun dockAndApps() {
-        header("Dock")
-        row("Dock", "${apps.get(apps.dock()).size}/${apps.dockMax} app") { reorderFavourites(it) }
-        row("Dock Sport", "${apps.get(apps.dock(true)).size}/${apps.dockMax} app") { reorderFavourites(it, sport = true) }
-        header("Aspetto del dock")
-        val scales = listOf(0.85f to "Piccole", 1f to "Normali", 1.15f to "Grandi")
-        row("Dimensione delle app", scales.firstOrNull { it.first == apps.dockScale }?.second ?: "Normali") { v ->
-            pick(v, "Dimensione delle app nel dock", scales.map { "${it.second} · fino a ${apps.dockMaxFor(it.first)} app" }, scales.indexOfFirst { it.first == apps.dockScale }) { i ->
-                apps.dockScale = scales[i].first
-                // bigger tiles hold fewer apps: the extra ones leave the dock
-                apps.setDock(apps.dock(false)); apps.setDock(apps.dock(true), true)
-            }
-        }
-        row("Nomi sulle app", if (apps.dockLabels) "Sì" else "No") { apps.dockLabels = !apps.dockLabels; build() }
-        header("Griglia delle app")
-        val orders = listOf("az" to "Alfabetico", "used" to "Più usate", "custom" to "Personalizzato")
-        row("Ordine", orders.first { it.first == apps.gridOrder }.second) { v ->
-            pick(v, "Ordine della griglia", orders.map { it.second }, orders.indexOfFirst { it.first == apps.gridOrder }) { i ->
-                if (orders[i].first == "custom" && apps.gridCustom.isEmpty()) apps.gridCustom = apps.grid().map { it.pkg }
-                apps.gridOrder = orders[i].first
-            }
-        }
-        note("Tieni premuto OK su un'app: Sposta per metterla dove vuoi, Personalizza per nome, immagine, dimensione, cartella e righe.")
-        header("Righe e cartelle")
-        val col = Collections(this)
-        row("Le tue righe", col.rows.size.let { if (it == 0) "Nessuna" else "$it in Esplora" }) { v -> customRows(v) }
-        row("Cartelle", col.folders.size.let { if (it == 0) "Nessuna" else "$it" }) { v -> folders(v) }
-        header("App")
-        row("App nascoste", apps.hiddenApps().size.let { if (it == 0) "Nessuna" else "$it app" }) { hiddenApps(it) }
-        val names = getSharedPreferences("app_names", MODE_PRIVATE).all
-        if (names.isNotEmpty()) row("Ripristina i nomi originali", "${names.size} app") {
-            getSharedPreferences("app_names", MODE_PRIVATE).edit().clear().apply()
-            toast("Nomi originali ripristinati")
-            build()
-        }
-    }
-
-    private fun sportAndTv() {
+        toggle("Titolo e info sopra le card", "showCardInfo", Theme.showCardInfo)
         header("Le tue squadre")
         row("Squadra del cuore", prefs.teamName ?: "Nessuna") { v ->
             lifecycleScope.launch {
@@ -554,25 +419,99 @@ class SettingsActivity : ComponentActivity() {
         row("Scuderia F1", prefs.f1Team ?: "Nessuna") { v ->
             choose(v, "Scuderia F1", listOf("" to "Nessuna") + f1.map { it to it }, prefs.f1Team ?: "") { prefs.f1Team = it.ifEmpty { null } }
         }
+        row("Prova un avviso", "›") {
+            finish()
+            window.decorView.postDelayed({ WakeService.testBanner() }, 600)
+        }
+    }
+
+    private fun tabsPicker(anchor: View) {
+        val hidden = Customize.hiddenTabs(this)
+        val p = popup().title("Schede visibili", "OK per mostrare o nascondere")
+        Customize.TABS.forEach { (key, name) ->
+            p.button(if (key in hidden) name else "✓  $name") {
+                Theme.edit(this).putStringSet("hiddenTabs", if (key in hidden) hidden - key else hidden + key).apply()
+                build(); tabsPicker(rows[focusRow])
+            }
+        }
+        p.showUnder(anchor)
+    }
+
+    private fun dockAndApps() {
+        header("Dock")
+        row("Dock", "${apps.get(apps.dock()).size}/${apps.dockMax} app") { reorderFavourites(it) }
+        row("Dock Sport", "${apps.get(apps.dock(true)).size}/${apps.dockMax} app") { reorderFavourites(it, sport = true) }
+        val scales = listOf(0.85f to "Piccole", 1f to "Normali", 1.15f to "Grandi")
+        row("Dimensione", scales.firstOrNull { it.first == apps.dockScale }?.second ?: "Normali") { v ->
+            pick(v, "Dimensione delle app nel dock", scales.map { "${it.second} · fino a ${apps.dockMaxFor(it.first)} app" }, scales.indexOfFirst { it.first == apps.dockScale }) { i ->
+                apps.dockScale = scales[i].first
+                apps.setDock(apps.dock(false)); apps.setDock(apps.dock(true), true)
+            }
+        }
+        row("Nomi sulle app", if (apps.dockLabels) "Sì" else "No") { apps.dockLabels = !apps.dockLabels; build() }
+        header("App")
+        val orders = listOf("az" to "Alfabetico", "used" to "Più usate", "custom" to "Personalizzato")
+        row("Ordine della griglia", orders.first { it.first == apps.gridOrder }.second) { v ->
+            pick(v, "Ordine della griglia", orders.map { it.second }, orders.indexOfFirst { it.first == apps.gridOrder }) { i ->
+                if (orders[i].first == "custom" && apps.gridCustom.isEmpty()) apps.gridCustom = apps.grid().map { it.pkg }
+                apps.gridOrder = orders[i].first
+            }
+        }
+        val col = Collections(this)
+        row("Le tue righe", col.rows.size.let { if (it == 0) "Nessuna" else "$it in Esplora" }) { v -> customRows(v) }
+        row("Cartelle", col.folders.size.let { if (it == 0) "Nessuna" else "$it" }) { v -> folders(v) }
+        row("App nascoste", apps.hiddenApps().size.let { if (it == 0) "Nessuna" else "$it app" }) { hiddenApps(it) }
+        note("Tieni premuto OK su un'app per spostarla o personalizzarla.")
+    }
+
+    private fun screensaver() {
+        header("Salvaschermo")
+        row("Salvaschermo", if (prefs.screensaver) "Sfondo e orologio" else "Quello di Amazon") { prefs.screensaver = !prefs.screensaver; build() }
+        val waits = listOf(2, 5, 10, 15, 30)
+        val wait = runCatching { Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT) / 60_000 }.getOrDefault(5)
+        row("Parte dopo", "$wait minuti") { v ->
+            pick(v, "Salvaschermo dopo", waits.map { "$it minuti" }, waits.indexOf(wait)) { i ->
+                runCatching { Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, waits[i] * 60_000) }
+                    .onFailure { toast("Permesso mancante per cambiare il tempo") }
+            }
+        }
+        row("Widget", listOf("match" to "Partita", "f1" to "F1", "news" to "Notizie").filter { ScreensaverView.enabled(this, it.first) }.joinToString(" · ") { it.second }.ifEmpty { "Nessuno" }) { v ->
+            val p = popup().title("Widget del salvaschermo", "In basso, sotto l'orologio")
+            listOf("match" to "Prossima partita della tua squadra", "f1" to "Prossima sessione di F1", "news" to "Notizie").forEach { (k, n) ->
+                p.button(if (ScreensaverView.enabled(this, k)) "✓  $n" else n) {
+                    Theme.edit(this).putBoolean("ss_$k", !ScreensaverView.enabled(this, k)).apply(); build()
+                }
+            }
+            p.gap()
+            p.button("Fonti delle notizie…") { newsFeeds(v) }
+            p.showUnder(v)
+        }
+        row("Prova", "›") {
+            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_SCREENSAVER))
+            finish()
+        }
+    }
+
+    private fun sportAndTv() {
         header("Sportio")
-        row("Playlist Sportio", "Numero ${prefs.sportioSource}") { v ->
-            pick(v, "Playlist Sportio", (1..10).map { "Playlist $it" }, prefs.sportioSource - 1) { i -> prefs.sportioSource = i + 1 }
+        row("Playlist", "Numero ${prefs.sportioSource}") { v ->
+            val p = popup().title("Playlist Sportio", "OK per provarla: Sportio dovrebbe aprire RAI 1")
+            (1..10).forEach { n ->
+                p.button(if (n == prefs.sportioSource) "✓  Playlist $n" else "Playlist $n") {
+                    prefs.sportioSource = n; build(); Sportio.play(this, "RAI 1")
+                }
+            }
+            p.showUnder(v)
         }
-        row("Prova: apri RAI 1", "›") { Sportio.play(this, "RAI 1") }
-        note("Se Sportio apre la lista dei canali invece di RAI 1, scegli un altro numero di playlist.")
-        header("Sport e canali")
-        row("WireGuard per lo sport", prefs.sportVpn?.let { "Attiva · $it" } ?: "Spenta") {
-            prefs.sportVpn = if (prefs.sportVpn == null) "wgcf-profile" else null
-            build()
-        }
-        note("Si attiva quando apri una partita o un canale Sky in Sportio e si spegne quando torni alla home.")
-        header("VPN")
+        row("WireGuard per lo sport", prefs.sportVpn?.let { "Attivo" } ?: "Spento") { prefs.sportVpn = if (prefs.sportVpn == null) "wgcf-profile" else null; build() }
         row("App VPN", LauncherPrefs.VPN_APPS.firstOrNull { it.first == prefs.vpnPackage }?.second ?: "Da scegliere") {
             choose(it, "App VPN", installedVpns(), prefs.vpnPackage) { v -> prefs.vpnPackage = v }
         }
     }
 
     private fun account() {
+        header("Nuvio")
+        row("Account Nuvio", if (nuvio.isLinked) "Collegato · profilo ${nuvio.profileIndex}" else "Non collegato") { nuvioAccount(it) }
         header("Backup")
         row("Salva le impostazioni", "In Download ›") {
             lifecycleScope.launch {
@@ -582,7 +521,7 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         val found = runCatching { Backup.list(this) }.getOrElse { emptyList() }
-        row("Ripristina impostazioni", if (found.isEmpty()) "Nessun backup in Download" else "${found.size} backup ›") { v ->
+        row("Ripristina", if (found.isEmpty()) "Nessun backup" else "${found.size} backup ›") { v ->
             if (found.isEmpty()) { toast("Copia un file NelloTV-backup in Download (ad esempio con LocalSend)"); return@row }
             val p = popup().title("Ripristina", "Sostituisce le impostazioni attuali")
             found.forEach { (name, uri) ->
@@ -590,7 +529,6 @@ class SettingsActivity : ComponentActivity() {
                     val ok = runCatching { Backup.restore(this, uri) }.getOrDefault(false)
                     if (!ok) { toast("Questo file non è un backup di Nello TV"); return@button }
                     toast("Impostazioni ripristinate")
-                    // start fresh with everything restored
                     startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                     finish()
                     Runtime.getRuntime().exit(0)
@@ -598,18 +536,16 @@ class SettingsActivity : ComponentActivity() {
             }
             p.showUnder(v)
         }
-        note("Il file contiene dock, righe, cartelle, aspetto, squadra, playlist Sportio, account Nuvio e il tuo sfondo. Invialo all'altra Fire TV con LocalSend e ripristinalo da qui.")
-        header("Nuvio")
-        row("Account Nuvio", if (nuvio.isLinked) "Collegato · profilo ${nuvio.profileIndex}" else "Non collegato") { nuvioAccount(it) }
-        note("Serve per Continua a guardare e per i consigli in Per te.")
+        row("Configurazione iniziale", "›") {
+            prefs.onboarded = false
+            prefs.onboardingStep = 0
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        }
     }
 
     private fun fireTv() {
         header("Home")
-        row("Nello TV come home", if (prefs.replaceHome) "Sì · anche il tasto Home" else "Solo dopo lo standby") {
-            prefs.replaceHome = !prefs.replaceHome
-            build()
-        }
+        row("Nello TV come home", if (prefs.replaceHome) "Anche il tasto Home" else "Solo dopo lo standby") { prefs.replaceHome = !prefs.replaceHome; build() }
         row("Apri la home di Amazon", "›") {
             WakeService.amazonHomeUntil = System.currentTimeMillis() + 60_000
             runCatching {
@@ -617,14 +553,31 @@ class SettingsActivity : ComponentActivity() {
                     .setPackage("com.amazon.tv.launcher").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
-        header("Impostazioni della Fire TV")
+        header("Fire TV")
+        system("Impostazioni della Fire TV", Settings.ACTION_SETTINGS)
         system("Rete e Wi-Fi", Settings.ACTION_WIFI_SETTINGS)
-        system("Telecomandi e dispositivi Bluetooth", "android.settings.CONTROLLERS_SETTINGS")
-        system("Applicazioni", Settings.ACTION_APPLICATION_SETTINGS)
-        system("La mia Fire TV · Opzioni sviluppatore", Settings.ACTION_DEVICE_INFO_SETTINGS)
-        system("Accessibilità", Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        // Schermo e audio / Preferenze are reserved to Amazon's launcher: reachable from here
-        system("Tutte le impostazioni (anche Schermo e audio)", Settings.ACTION_SETTINGS)
+        system("Telecomandi e Bluetooth", "android.settings.CONTROLLERS_SETTINGS")
+    }
+
+    private fun info() {
+        header("Nello TV")
+        row("Versione", Updater.name()) {}
+        row("Aggiornamenti", "Controlla ›") {
+            startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_CHECK_UPDATE))
+            finish()
+        }
+        header("Questa Fire TV")
+        // Amazon's model codes, by name
+        val models = mapOf(
+            "AFTKRT" to "Fire TV Stick 4K Max (2ª gen.)", "AFTKA" to "Fire TV Stick 4K Max", "AFTKM" to "Fire TV Stick 4K (2ª gen.)",
+            "AFTMM" to "Fire TV Stick 4K", "AFTSSS" to "Fire TV Stick (3ª gen.)", "AFTSS" to "Fire TV Stick Lite",
+            "AFTGAZL" to "Fire TV Cube (3ª gen.)", "AFTR" to "Fire TV Cube (2ª gen.)",
+        )
+        row("Modello", models[android.os.Build.MODEL] ?: android.os.Build.MODEL) {}
+        val (freeDisk, totalDisk) = DeviceStatus.storage()
+        row("Memoria libera", "${DeviceStatus.gb(freeDisk)} di ${DeviceStatus.gb(totalDisk)}") {}
+        val (freeRam, totalRam) = DeviceStatus.memory(this)
+        row("RAM libera", "${DeviceStatus.gb(freeRam)} di ${DeviceStatus.gb(totalRam)}") {}
     }
 
     private fun system(title: String, action: String) = row(title, "›") {

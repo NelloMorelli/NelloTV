@@ -68,7 +68,7 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
             addView(ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 val f = File(context.filesDir, BACKGROUND)
-                if (f.exists()) setImageBitmap(BitmapFactory.decodeFile(f.path)) else setImageResource(R.drawable.wallpaper)
+                if (f.exists()) setImageBitmap(BitmapFactory.decodeFile(f.path))
             }, LayoutParams(-1, -1))
         }
         addView(dim, LayoutParams(-1, -1))
@@ -270,7 +270,7 @@ class GlassClock(context: Context) : View(context) {
         // what's behind the digits: the launcher's blurred wallpaper, brighter
         val blur = GlassView.blurred ?: run {
             val f = File(context.filesDir, ScreensaverView.BACKGROUND)
-            val b = if (f.exists()) BitmapFactory.decodeFile(f.path) else BitmapFactory.decodeResource(resources, R.drawable.wallpaper)
+            val b = if (f.exists()) BitmapFactory.decodeFile(f.path) else null
             b?.let { GlassView.makeBlur(it) }
         }
         source = blur

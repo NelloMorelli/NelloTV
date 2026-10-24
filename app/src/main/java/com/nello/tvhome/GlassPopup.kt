@@ -228,6 +228,14 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
                     if (event.action == android.view.KeyEvent.ACTION_UP) closeToAnchor()
                     return true
                 }
+                // ↑ with nothing above inside the pop-up (a button, an app in a row…): back to its button
+                if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                    val f = findFocus()
+                    if (f != null && android.view.FocusFinder.getInstance().findNextFocus(this, f, View.FOCUS_UP) == null) {
+                        closeToAnchor()
+                        return true
+                    }
+                }
                 return super.dispatchKeyEvent(event)
             }
         }

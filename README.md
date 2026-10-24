@@ -9,6 +9,21 @@
   <b>English</b> · <a href="README.it.md">Italiano</a>
 </p>
 
+## Screenshots
+
+<p align="center"><i>Posters, channel artwork and other apps' logos are blurred: the pictures only show the launcher.</i></p>
+
+| | |
+|---|---|
+| ![Esplora](docs/screenshots/home.jpg) | ![Serie TV](docs/screenshots/series.jpg) |
+| **Esplora** — *Per te* carousel and the dock, on the *Nero luminoso* background lit by the selected card | **Film / Serie TV** — one carousel per catalogue, dots on the left |
+| ![TV](docs/screenshots/tv.jpg) | ![Sport](docs/screenshots/sport.jpg) |
+| **TV** — what's on now, with each channel's logo | **Sport** — today's matches and F1 sessions, the sport dock |
+| ![Apps](docs/screenshots/apps.jpg) | ![Personalizza](docs/screenshots/customize.jpg) |
+| **App grid** — large and small tiles, free order with *Sposta* | **Personalizza** — name, image (also found online), size, folder, rows |
+
+<p align="center"><img src="docs/screenshots/settings.jpg" alt="Impostazioni" width="70%"><br><b>Impostazioni</b> — sections on the left, options on the right</p>
+
 ---
 
 ## Contents
@@ -46,7 +61,10 @@ It's a personal project: it doesn't play any content itself, it only shows what'
 
 **Navigation**
 - One large carousel per tab; **↑ / ↓** move between catalogues (dots on the left show where you are), **↑** on the first goes to the top menu, **↓** on the last goes to the dock. **Back** always returns to the top menu.
-- A **dock** of five apps at the bottom (a separate one for the Sport tab), editable with a long press on any app.
+- A **dock** at the bottom that holds as many apps as fit across the screen (7 at normal size, 6 large, 8 small), with a separate one for the Sport tab.
+- **Hold OK** on any app for a short menu: *Apri*, *Sposta* (move it anywhere in the dock or grid with the arrows: the tiles slide into place and the page follows), add to / remove from the dock, *Personalizza…*, *Nascondi*.
+- **Personalizza…** — rename, change the image (a picture on the Fire TV, or alternatives found online on Google Play: HD icon, trailer cover, screenshots), size in the grid, folder, custom rows, sport apps.
+- In every pop-up, **↑** with nothing above closes it and goes back to its button.
 
 **Top-right menu**
 - 🛡 **VPN** state and public IP · 📶 **network**, signal and ping · 🔊 **audio output** (TV or Bluetooth headphones, one press to switch) · ⚙ **settings**.
@@ -54,7 +72,10 @@ It's a personal project: it doesn't play any content itself, it only shows what'
 **Look**
 - Frosted-glass UI over your wallpaper, a liquid selector pill, pop-ups that grow out of the button you pressed, **Poppins** typeface.
 - **Always-on screensaver**: the wallpaper dims and a liquid-glass clock appears; it drifts slightly every minute to protect the screen.
-- Fully customisable: accent colour, glass intensity, wallpaper (built-in or your own image), corners, card size, visible tabs and catalogues, app names, night mode.
+- **Nero luminoso** (the default background): black, lit softly in the colour of whatever is selected, with a thin plate of lit glass around it.
+- Other backgrounds: film or series of the day, Bing photo of the day, your own image or a folder in rotation, plain black.
+- Apps without a horizontal banner get a cover drawn in the colour of their icon.
+- Customisable: accent colour, glass intensity, interface size, visible tabs and catalogues, app names and images, night mode, navigation sounds.
 
 **Smart extras**
 - Reminders 10 minutes before your team's matches and your F1 team's sessions, over any app — press **OK** on the banner to watch.
@@ -99,7 +120,7 @@ On a new Fire TV, Nello TV opens with a short setup. Until you finish it, pressi
 4. **Canali in Sportio** — choose your playlist number and press it: Sportio should play RAI 1. If it opens the channel list instead, press Home and try the next number.
 5. **Nuvio** — sign in with a QR code, or skip.
 
-You can run it again from **Impostazioni → Generale → Configurazione iniziale**.
+You can run it again from **Impostazioni → Account → Configurazione iniziale**.
 
 ## Using it
 
@@ -110,21 +131,22 @@ You can run it again from **Impostazioni → Generale → Configurazione inizial
 | Carousel | ← → | move between titles (it wraps round) |
 | Carousel | ↑ / ↓ | previous / next catalogue; past the first → top menu, past the last → dock |
 | Anywhere | Back | top menu |
-| App | hold OK or ☰ | app menu: move, add to or remove from the dock, hide |
+| App | hold OK or ☰ | app menu: open, move, dock, customise, hide |
 | Match | hold OK or ☰ | match page (line-ups, events) |
-| Pop-up | ↑ on the first row | closes it and returns to its button |
+| Pop-up | ↑ with nothing above | closes it and returns to its button |
 
 ## Settings
 
 Open them from ⚙ → **Impostazioni del launcher**: a full screen with sections on the left and options on the right (the interface is in Italian; translations in brackets).
 
-- **Generale** (general) — wallpaper, night mode, screensaver (on/off, delay, test), reminders, updates, first-start setup.
-- **Aspetto** (look) — accent colour, glass, wallpaper dimming, corners, card size, animation speed.
-- **Schermata** (screen) — start tab, dock and card info on/off, which tabs and catalogues are shown.
-- **Dock e app** — dock, sport dock, hidden apps, rename apps.
-- **Sport e TV** — your team, F1 team, Sportio playlist (with a test), WireGuard for sport, VPN app.
-- **Account** — Nuvio Sync.
+- **Aspetto** (look) — background, night mode, accent colour, glass, interface size, navigation sounds.
+- **Home** — start tab, visible tabs and catalogues, card info, your team and F1 team, test reminder.
+- **App e dock** — dock and sport dock, dock size and names, grid order, custom rows, folders, hidden apps.
+- **Salvaschermo** (screensaver) — on/off, delay, widgets (match, F1, news and their sources), test.
+- **Sport e TV** — Sportio playlist (picking one tests it), WireGuard for sport, VPN app.
+- **Account** — Nuvio Sync, backup and restore, first-start setup.
 - **Fire TV** — *Nello TV come home*, *Apri la home di Amazon*, shortcuts to the Fire TV settings.
+- **Info** — Nello TV version and update check, Fire TV model, free storage and RAM.
 
 ## Sport, Sportio and WireGuard
 
@@ -134,7 +156,7 @@ Open them from ⚙ → **Impostazioni del launcher**: a full screen with section
 
 ## Updates
 
-Each release on this repository contains the APK. Nello TV checks for a newer one at start-up and in ⚙ (the header shows *aggiornato* or the new version); one OK downloads and installs it.
+Each release on this repository contains the APK. Nello TV checks for a newer one at start-up and in Impostazioni → Info → *Aggiornamenti*; one OK downloads and installs it.
 
 The check compares the **build number** (the release tag, `v59`), so the version name can stay the same between releases.
 
@@ -194,7 +216,7 @@ app/src/main/java/com/nello/tvhome/
 | Home opens Amazon's home | The Nello TV service is off: Fire TV Settings → Accessibility → Nello TV → on (or run the first-start setup). |
 | A match opens Sportio's channel list instead of the channel | Wrong playlist number: Impostazioni → Sport e TV → *Playlist Sportio*, test with *Prova: apri RAI 1*. |
 | WireGuard doesn't switch on | Turn on *Allow remote control apps* in WireGuard, and allow the permission Nello TV asks for. |
-| No screensaver | Turn on the Fire TV screensaver (Fire TV Settings → Display & sounds) and the one in Nello TV (Impostazioni → Generale). |
+| No screensaver | Turn on the Fire TV screensaver (Fire TV Settings → Display & sounds) and the one in Nello TV (Impostazioni → Salvaschermo). |
 | Updates don't install | Allow "apps from unknown sources" for Nello TV. |
 
 ---

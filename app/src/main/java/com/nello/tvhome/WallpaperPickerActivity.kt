@@ -34,8 +34,11 @@ class WallpaperPickerActivity : GlassPage() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         forApp = intent.getStringExtra(EXTRA_APP)
-        if (forApp != null) title("Immagine per ${intent.getStringExtra(EXTRA_APP_NAME)}", "Viene ritagliata in 16:9 · inviale con LocalSend o scaricale con Downloader")
-        else title("Scegli uno sfondo", "Immagini sulla Fire TV · inviale con LocalSend o scaricale con Downloader")
+        if (forApp != null) {
+            title("Immagine per ${intent.getStringExtra(EXTRA_APP_NAME)}", "Online da Google Play, oppure una tua immagine sulla Fire TV (ritagliata in 16:9)")
+            online(forApp!!, intent.getStringExtra(EXTRA_APP_NAME) ?: "")
+            header("Sulla Fire TV")
+        } else title("Scegli uno sfondo", "Immagini sulla Fire TV · inviale con LocalSend o scaricale con Downloader")
         if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 1)
         } else load()
@@ -52,7 +55,7 @@ class WallpaperPickerActivity : GlassPage() {
         lifecycleScope.launch {
             val pics = withContext(Dispatchers.IO) { query() }
             if (pics.isEmpty()) {
-                info("Nessuna immagine trovata", "")
+                info("Nessuna immagine sulla Fire TV", "")
                 list.addView(TextView(this@WallpaperPickerActivity).apply {
                     text = "Invia una foto alla Fire TV con l'app LocalSend (già installata) oppure scaricala con Downloader, poi torna qui."
                     textSize = 14f
@@ -90,7 +93,39 @@ class WallpaperPickerActivity : GlassPage() {
                 row.gravity = Gravity.CENTER_VERTICAL
                 if (first == null) first = row
             }
-            first?.post { first?.requestFocus() }
+            if (forApp == null || currentFocus == null) first?.post { first?.requestFocus() }
+        }
+    }
+
+    /** Alternatives found online, at the top; they take the focus as soon as they arrive. */
+    private fun online(pkg: String, label: String) {
+        header("Online")
+        val status = info("Cerco su Google Play…", "")
+        val statusRow = status.parent as android.view.View
+        lifecycleScope.launch {
+            val found = runCatching { AppArt.find(pkg, label) }.getOrElse { emptyList() }
+            if (found.isEmpty()) {
+                (statusRow as LinearLayout).let { (it.getChildAt(0) as TextView).text = "Nessuna immagine trovata online" }
+                return@launch
+            }
+            var at = list.indexOfChild(statusRow)
+            list.removeView(statusRow)
+            var first: android.view.View? = null
+            found.forEach { cand ->
+                val row = item(cand.label, null) {
+                    Apps(this@WallpaperPickerActivity).setCustomImage(pkg, cand.image)
+                    Toast.makeText(this@WallpaperPickerActivity, "Immagine impostata", Toast.LENGTH_SHORT).show()
+                    finish()
+                } as LinearLayout
+                row.addView(ImageView(this@WallpaperPickerActivity).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setImageBitmap(cand.image)
+                }, 0, LinearLayout.LayoutParams(dp(128), dp(72)).apply { marginEnd = dp(16) })
+                list.removeView(row)
+                list.addView(row, at++, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(1) })
+                if (first == null) first = row
+            }
+            first?.requestFocus()
         }
     }
 

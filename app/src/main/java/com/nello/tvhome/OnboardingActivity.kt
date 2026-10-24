@@ -48,7 +48,7 @@ class OnboardingActivity : ComponentActivity() {
         prefs = LauncherPrefs(this)
         val back = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            GlassView.blurred?.let { setImageBitmap(it) } ?: setImageResource(R.drawable.wallpaper)
+            GlassView.blurred?.let { setImageBitmap(it) }
         }
         title = TextView(this).apply {
             textSize = 34f

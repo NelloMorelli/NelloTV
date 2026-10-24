@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity(), Host {
     private lateinit var carouselMeta: TextView
     private lateinit var catalogLabel: TextView
     private lateinit var dockList: RowList
+    private lateinit var glow: GlowView
 
     /** which catalog each single-screen tab shows (index in its rows) */
     private val catalogIndex = HashMap<Section, Int>()
@@ -183,7 +184,11 @@ class MainActivity : ComponentActivity(), Host {
         findViewById<View>(R.id.main).layoutParams.height = resources.displayMetrics.heightPixels
         continueList.layoutManager = StartAlignedLayoutManager(this, RecyclerView.HORIZONTAL)
         continueList.itemAnimator = null
-        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, new -> followFocus(new) }
+        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, new -> followFocus(new); glow.track(new) }
+        // "Nero luminoso": just above the wallpaper, under everything else
+        glow = GlowView(this)
+        (findViewById<View>(R.id.wallpaper).parent as ViewGroup).addView(glow, 1, ViewGroup.LayoutParams(-1, -1))
+        window.decorView.viewTreeObserver.addOnScrollChangedListener { glow.poke() }
         single = findViewById(R.id.single)
         hero = findViewById(R.id.hero)
         carousel = findViewById(R.id.carousel)
@@ -585,26 +590,24 @@ class MainActivity : ComponentActivity(), Host {
         p.showUnder(anchor)
     }
 
-    /**
-     * ⚙: the launcher's state up top (version, whether it's up to date), then the two ways in —
-     * the launcher's own settings and the Fire TV's.
-     */
+    /** ⚙: the two ways in, the launcher's own settings and the Fire TV's (version and updates live in Impostazioni → Info). */
     private fun showSettingsPopup() {
         val p = popup()
-        val status = p.hero("Nello TV", "Versione ${Updater.name()} · controllo aggiornamenti…")
         p.button("Impostazioni del launcher") { openSettings() }
         p.button("Impostazioni della Fire TV") { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }
-        val job = lifecycleScope.launch {
-            val r = if (Updater.configured) runCatching { Updater.check() }.getOrNull() else null
-            status.text = "Versione ${Updater.name()} · " + (r?.let { "disponibile la ${it.name}" } ?: "aggiornato")
-        }
-        p.onDismiss = { job.cancel() }
         p.showUnder(findViewById(R.id.settingsButton))
     }
 
     /** Wallpaper from the settings screen. */
     private fun applyPrefs() {
         GlassView.night = prefs.night
+        glow.night = prefs.night
+        if (glow.lit != (prefs.wallpaper == "glow")) {
+            glow.lit = prefs.wallpaper == "glow"
+            // the glow paints the whole screen itself: no wallpaper drawn underneath for nothing
+            findViewById<View>(R.id.wallpaper).visibility = if (glow.lit) View.INVISIBLE else View.VISIBLE
+            glow.track(currentFocus)
+        }
         // rotation: which picture is due now (changes every rotationMinutes)
         val slot = if (prefs.wallpaper == "rotation") System.currentTimeMillis() / (prefs.rotationMinutes * 60_000L) else 0L
         val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
@@ -615,14 +618,14 @@ class MainActivity : ComponentActivity(), Host {
         appliedWallpaper = key
         lifecycleScope.launch {
             val source: android.graphics.Bitmap? = when (prefs.wallpaper) {
-                "black" -> null
+                "black", "glow" -> null
                 "daily" -> runCatching {
                     val url = Tmdb.list("/trending/all/day").firstOrNull()?.backdrop ?: error("none")
                     val result = coil.ImageLoader(this@MainActivity).execute(
                         coil.request.ImageRequest.Builder(this@MainActivity).data(url).allowHardware(false).build()
                     )
                     (result.drawable as android.graphics.drawable.BitmapDrawable).bitmap
-                }.getOrElse { withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) } }
+                }.getOrElse { withContext(Dispatchers.IO) { null } }
                 "bing" -> runCatching {
                     val js = org.json.JSONObject(Net.get("https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=it-IT"))
                     val url = "https://www.bing.com" + js.getJSONArray("images").getJSONObject(0).getString("url")
@@ -630,17 +633,17 @@ class MainActivity : ComponentActivity(), Host {
                         coil.request.ImageRequest.Builder(this@MainActivity).data(url).allowHardware(false).build()
                     )
                     (result.drawable as android.graphics.drawable.BitmapDrawable).bitmap
-                }.getOrElse { withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) } }
+                }.getOrElse { withContext(Dispatchers.IO) { null } }
                 "rotation" -> withContext(Dispatchers.IO) {
                     val pics = prefs.rotationFolder?.let { WallpaperPickerActivity.folderImages(this@MainActivity, it) }.orEmpty()
                     pics.getOrNull((slot % pics.size.coerceAtLeast(1)).toInt())?.let { WallpaperPickerActivity.decodeScaled(this@MainActivity, it) }
-                        ?: BitmapFactory.decodeResource(resources, R.drawable.wallpaper)
+                        ?: null
                 }
                 "custom" -> withContext(Dispatchers.IO) {
                     BitmapFactory.decodeFile(java.io.File(filesDir, WallpaperPickerActivity.CUSTOM_FILE).path)
-                        ?: BitmapFactory.decodeResource(resources, R.drawable.wallpaper)
+                        ?: null
                 }
-                else -> withContext(Dispatchers.IO) { BitmapFactory.decodeResource(resources, R.drawable.wallpaper) }
+                else -> withContext(Dispatchers.IO) { null }
             }
             val composed = withContext(Dispatchers.Default) { composeBackground(source) }
             // a soft crossfade from the old wallpaper to the new one
@@ -700,7 +703,10 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun setGlass(source: android.graphics.Bitmap?) {
         lifecycleScope.launch {
-            GlassView.blurred = source?.let { withContext(Dispatchers.Default) { GlassView.makeBlur(it) } }
+            // black backgrounds have nothing to blur: the glass gets a dark surface of its own
+            // (else pop-ups would show what's under them, sharp)
+            val src = source ?: android.graphics.Bitmap.createBitmap(64, 36, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF15161A.toInt()) }
+            GlassView.blurred = withContext(Dispatchers.Default) { GlassView.makeBlur(src) }
             listOf(R.id.rightBar, R.id.dock, R.id.searchGlass).forEach { findViewById<View>(it).invalidate() }
         }
     }
@@ -2291,7 +2297,13 @@ class MainActivity : ComponentActivity(), Host {
             else -> return true
         }
         if (movingInDock) {
-            if (dir == 1 || dir == -1) { apps.moveInDock(m.pkg, dir, sportDock); refreshDock(m.label) }
+            if (dir == 1 || dir == -1) {
+                val before = dockBoxes()
+                apps.moveInDock(m.pkg, dir, sportDock)
+                refreshDock(m.label)
+                slideFrom(dockList, before, ::dockBoxes, m.label)
+            }
+            // the dock hands the focus back a moment later: keep the tile lifted after that
             window.decorView.postDelayed({ liftMoving(true) }, 160)
             return true
         }
@@ -2310,6 +2322,8 @@ class MainActivity : ComponentActivity(), Host {
         }
         if (target !in flat.indices || target == from) return true
         val order = flat.toMutableList().apply { add(target, removeAt(from)) }
+        val before = gridBoxes()
+        val fromRow = rows.indexOfFirst { m.pkg in it }
         if (current == Section.SPORT) {
             apps.sportApps = order.filter { !it.startsWith(Collections.FOLDER) && it != Apps.HIDDEN_TILE }
             val state = states[Section.SPORT]
@@ -2320,9 +2334,61 @@ class MainActivity : ComponentActivity(), Host {
             apps.gridCustom = order
             refreshGrid(m.pkg)
         }
-        // the new tile appears already lifted, no drop-and-lift
-        movingView()?.let { v -> v.animate().cancel(); v.scaleX = 1.14f; v.scaleY = 1.14f; v.translationY = -8 * resources.displayMetrics.density; v.elevation = 24 * resources.displayMetrics.density }
+        // every tile glides from where it was to its new place, the moved one still lifted
+        slideFrom(bento, before, ::gridBoxes, m.pkg)
+        // changed row (e.g. from the first to the last): the page follows the app
+        val toRow = (0 until bento.childCount).indexOfFirst { r -> (bento.getChildAt(r) as ViewGroup).let { g -> (0 until g.childCount).any { g.getChildAt(it).tag == m.pkg } } }
+        if (toRow != fromRow) bento.post { followFocus(movingView()) }
         return true
+    }
+
+    /** Tiles of the grid by app, with their place inside the grid (layout only, no animation offsets). */
+    private fun gridBoxes(): Map<String, android.graphics.RectF> = bentoTiles().mapNotNull { t ->
+        val key = t.tag as? String ?: return@mapNotNull null
+        val row = t.parent as View
+        key to android.graphics.RectF((row.left + t.left).toFloat(), (row.top + t.top).toFloat(), (row.left + t.right).toFloat(), (row.top + t.bottom).toFloat())
+    }.toMap()
+
+    private fun dockBoxes(): Map<String, android.graphics.RectF> = (0 until dockList.childCount).map { dockList.getChildAt(it) }.mapNotNull { t ->
+        val key = t.contentDescription?.toString() ?: return@mapNotNull null
+        key to android.graphics.RectF(t.left.toFloat(), t.top.toFloat(), t.right.toFloat(), t.bottom.toFloat())
+    }.toMap()
+
+    /**
+     * After a move the tiles are new views in new places: start each one where its app was a moment
+     * ago (position and size) and let it glide home. The moved tile stays lifted throughout.
+     */
+    private fun slideFrom(container: View, before: Map<String, android.graphics.RectF>, boxes: () -> Map<String, android.graphics.RectF>, lifted: String) {
+        val dp = resources.displayMetrics.density
+        container.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                container.viewTreeObserver.removeOnPreDrawListener(this)
+                val now = boxes()
+                val views = if (container === dockList) (0 until dockList.childCount).map { dockList.getChildAt(it) }.associateBy { it.contentDescription?.toString() }
+                    else bentoTiles().associateBy { it.tag as? String }
+                now.forEach { (key, box) ->
+                    val v = views[key] ?: return@forEach
+                    val isLifted = key == lifted
+                    val base = if (isLifted) 1.14f else 1f
+                    val baseY = if (isLifted) -8 * dp else 0f
+                    v.animate().cancel()
+                    v.elevation = if (isLifted) 24 * dp else 0f
+                    val old = before[key]
+                    if (old == null || (old == box)) {
+                        v.scaleX = base; v.scaleY = base; v.translationX = 0f; v.translationY = baseY
+                        return@forEach
+                    }
+                    val s = old.width() / box.width().coerceAtLeast(1f)
+                    v.translationX = old.centerX() - box.centerX()
+                    v.translationY = old.centerY() - box.centerY() + baseY
+                    v.scaleX = base * s; v.scaleY = base * old.height() / box.height().coerceAtLeast(1f)
+                    v.animate().translationX(0f).translationY(baseY).scaleX(base).scaleY(base)
+                        .setDuration(if (isLifted) 300 else 260)
+                        .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0.9f, 0.25f, 1f)).start()
+                }
+                return true
+            }
+        })
     }
 
     /** An app's image changed (picker or "Immagine originale"): dock and grid redrawn. */
