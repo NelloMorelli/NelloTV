@@ -516,7 +516,12 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
         window.setOnDismissListener { onDismiss?.invoke() }
     }
 
+    /** where the focus goes when it opens (default: the first button) */
+    var initialFocus: (() -> View?)? = null
+
     private fun focusFirst() {
+        val custom = initialFocus
+        if (custom != null) { card.postDelayed({ (custom() ?: firstButton)?.requestFocus() }, 60); return }
         firstButton?.post { firstButton?.requestFocus() }
     }
 

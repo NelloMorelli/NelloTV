@@ -64,11 +64,44 @@ class Apps(private val context: Context) {
         .filter { it.pkg !in hidden }
         .sortedWith(compareBy(Collator.getInstance(Locale.ITALY)) { it.label })
 
-    /** [all] plus the "App nascoste" tile when something is hidden. */
+    /**
+     * "Tutte le app": every visible app, with the ones in a folder replaced by the folder's tile
+     * (alphabetical by its name), plus the "App nascoste" tile when something is hidden.
+     */
     fun grid(): List<AppInfo> {
+        val folders = Collections(context).folders
+        val inFolders = folders.flatMap { it.apps }.toSet()
+        val tiles = all().filter { it.pkg !in inFolders } + folders.mapNotNull { f ->
+            val members = get(f.apps)
+            if (members.isEmpty()) null else AppInfo(Collections.FOLDER + f.id, f.name, null, folderIcon(members))
+        }
+        val sorted = tiles.sortedWith(compareBy(Collator.getInstance(Locale.ITALY)) { it.label })
         val count = hidden.count { it in installed() }
-        return if (count == 0) all()
-        else all() + AppInfo(HIDDEN_TILE, "App nascoste ($count)", null, context.getDrawable(android.R.drawable.ic_menu_view))
+        return if (count == 0) sorted
+        else sorted + AppInfo(HIDDEN_TILE, "App nascoste ($count)", null, context.getDrawable(android.R.drawable.ic_menu_view))
+    }
+
+    /** A folder's face: the first four apps' icons in a 2×2 grid. */
+    private fun folderIcon(members: List<AppInfo>): android.graphics.drawable.Drawable {
+        val size = 256
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val shown = members.take(4)
+        // 1 app: large in the middle; 2: side by side; 3–4: a 2×2 grid
+        val cells: List<android.graphics.Rect> = when (shown.size) {
+            1 -> listOf(android.graphics.Rect(48, 48, 208, 208))
+            2 -> listOf(android.graphics.Rect(8, 68, 124, 184), android.graphics.Rect(132, 68, 248, 184))
+            else -> (0 until shown.size).map { i ->
+                val x = (i % 2) * 128; val y = (i / 2) * 128
+                android.graphics.Rect(x + 12, y + 12, x + 116, y + 116)
+            }
+        }
+        shown.forEachIndexed { i, app ->
+            val d = (app.icon ?: app.banner ?: return@forEachIndexed).constantState?.newDrawable()?.mutate() ?: return@forEachIndexed
+            d.bounds = cells[i]
+            d.draw(c)
+        }
+        return android.graphics.drawable.BitmapDrawable(context.resources, bmp)
     }
 
     fun get(pkgs: List<String>): List<AppInfo> = installed().let { map -> pkgs.filter { it !in hidden }.mapNotNull { map[it] } }

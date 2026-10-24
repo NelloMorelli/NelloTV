@@ -1438,6 +1438,7 @@ class MainActivity : ComponentActivity(), Host {
             findViewById<View>(R.id.continueTitle).visibility = if (cw.isEmpty()) View.GONE else View.VISIBLE
             continueList.visibility = if (cw.isEmpty()) View.GONE else View.VISIBLE
         }
+        bindCustomRows(state.section == Section.EXPLORE)
         val inDock = apps.dock(sportDock).toSet()
         val all = state.rows.firstOrNull { it.key == "allapps" || it.key == "sport_apps" }?.apps.orEmpty().filter { it.pkg !in inDock }
         if (all.map { it.pkg } != shownBento) {
@@ -1484,6 +1485,7 @@ class MainActivity : ComponentActivity(), Host {
             isFocusable = true
             isClickable = true
             contentDescription = app.label
+            tag = app.pkg
             setBackgroundResource(R.drawable.card_bg)
             foreground = Theme.cardFocus(this@MainActivity)
             clipToOutline = true
@@ -1537,7 +1539,8 @@ class MainActivity : ComponentActivity(), Host {
         var y = row.top
         var p = row.parent as? View
         while (p != null && p.id != R.id.pageContent) { y += p.top; p = p.parent as? View }
-        val target = if (isInside(v, continueList)) y - (60 * dp).toInt() else y - (140 * dp).toInt()
+        val inRow = isInside(v, continueList) || customRowViews.any { it.tag == "customRow" && isInside(v, it) }
+        val target = if (inRow) y - (60 * dp).toInt() else y - (140 * dp).toInt()
         val max = (page.getChildAt(0).height - page.height).coerceAtLeast(0)
         page.glideTo(target.coerceIn(0, max))
     }
@@ -1794,6 +1797,7 @@ class MainActivity : ComponentActivity(), Host {
 
     private fun rebuildExplore() {
         states.remove(Section.EXPLORE)
+        shownCustomRows = null
         if (current == Section.EXPLORE) show(Section.EXPLORE, focusContent = true)
     }
 
@@ -2025,6 +2029,10 @@ class MainActivity : ComponentActivity(), Host {
             showHiddenApps()
             return
         }
+        if (app.pkg.startsWith(Collections.FOLDER)) {
+            openFolder(app)
+            return
+        }
         if (!apps.launch(app.pkg)) toast("Impossibile aprire ${app.label}")
     }
 
@@ -2104,6 +2112,7 @@ class MainActivity : ComponentActivity(), Host {
 
     override fun onAppMenu(app: AppInfo) {
         if (app.pkg == Apps.HIDDEN_TILE) return
+        if (app.pkg.startsWith(Collections.FOLDER)) { folderMenu(app); return }
         spotlightSource = currentFocus
         val inDock = app.pkg in apps.dock(sportDock)
         val p = popup().title(app.label, if (inDock) (if (sportDock) "Nel dock Sport" else "Nel dock") else null)
@@ -2135,6 +2144,16 @@ class MainActivity : ComponentActivity(), Host {
                 toast(if (inSport) "${app.label} rimossa da App sport" else "${app.label} aggiunta ad App sport")
                 refreshSportApps(keepFocusAt = gridIndex)
             }
+        }
+        if (app.pkg != Apps.SETTINGS) {
+            val folder = collections.folderOf(app.pkg)
+            if (folder != null) p.button("Togli da \"${folder.name}\"") {
+                collections.removeFromFolder(app.pkg)
+                openFolderPopup?.dismiss()
+                toast("${app.label} tolta dalla cartella")
+                refreshGrid(app.pkg)
+            } else p.button("Metti in una cartella…") { chooseFolder(app) }
+            p.button("Aggiungi a una riga…") { chooseRow(app) }
         }
         if (app.pkg != Apps.SETTINGS) p.button("Nascondi app") {
             apps.hide(app.pkg)
@@ -2210,6 +2229,174 @@ class MainActivity : ComponentActivity(), Host {
                     setTextColor(0xFFFFFFFF.toInt())
                 }, android.widget.FrameLayout.LayoutParams(-1, -2, android.view.Gravity.BOTTOM).apply { bottomMargin = (16 * dp).toInt() })
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- folders & custom rows
+
+    private val collections by lazy { Collections(this) }
+    private var openFolderPopup: GlassPopup? = null
+
+    /** OK on a folder: its apps in a row, ready to open. */
+    private fun openFolder(tile: AppInfo) {
+        val f = collections.folder(tile.pkg.removePrefix(Collections.FOLDER)) ?: return
+        val members = apps.get(f.apps)
+        val dp = resources.displayMetrics.density
+        val width = ((members.size.coerceIn(2, 5) * 174 + 40)).coerceAtMost(900)
+        val p = GlassPopup(this, width)
+        p.title(f.name, "${members.size} app · tieni premuto OK su un'app per le opzioni")
+        val list = RowList(this).apply {
+            layoutManager = StartAlignedLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL)
+            clipChildren = false; clipToPadding = false
+            setPadding((6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt())
+            adapter = CardsAdapter(Row("folder", "", RowKind.APPS, apps = members), this@MainActivity)
+        }
+        p.view(list, (112 * dp).toInt())
+        p.gap()
+        p.button("Rinomina cartella") { askText("Nome della cartella", f.name) { collections.renameFolder(f.id, it); refreshGrid(Collections.FOLDER + f.id) } }
+        openFolderPopup = p
+        p.onDismiss = { openFolderPopup = null }
+        // straight onto the first app
+        p.initialFocus = { list.getChildAt(0) }
+        spotlightSource = currentFocus
+        p.showSpotlight(page, appHero(tile), 272, 153, spotlightSource)
+    }
+
+    private fun folderMenu(tile: AppInfo) {
+        val f = collections.folder(tile.pkg.removePrefix(Collections.FOLDER)) ?: return
+        spotlightSource = currentFocus
+        val p = popup().title(f.name, "Cartella · ${f.apps.size} app")
+        p.button("Apri") { openFolder(tile) }
+        p.button("Rinomina") { askText("Nome della cartella", f.name) { collections.renameFolder(f.id, it); refreshGrid(Collections.FOLDER + f.id) } }
+        p.button("Elimina cartella") {
+            collections.deleteFolder(f.id)
+            toast("Cartella eliminata · le app tornano nella griglia")
+            refreshGrid(null)
+        }
+        p.showSpotlight(page, appHero(tile), 272, 153, spotlightSource)
+    }
+
+    private fun chooseFolder(app: AppInfo) {
+        val p = popup().title("Metti ${app.label} in…")
+        collections.folders.forEach { f ->
+            p.button(f.name) {
+                collections.addToFolder(f.id, app.pkg)
+                toast("${app.label} in \"${f.name}\"")
+                refreshGrid(Collections.FOLDER + f.id)
+            }
+        }
+        p.button("＋  Nuova cartella…") {
+            askText("Nome della nuova cartella", "") { name ->
+                val f = collections.createFolder(name, app.pkg)
+                toast("Cartella \"$name\" creata")
+                refreshGrid(Collections.FOLDER + f.id)
+            }
+        }
+        p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
+    }
+
+    private fun chooseRow(app: AppInfo) {
+        val p = popup().title("Aggiungi ${app.label} a…", "OK per aggiungere o togliere")
+        collections.rows.forEach { r ->
+            p.button(if (app.pkg in r.apps) "✓  ${r.name}" else r.name) {
+                collections.toggleInRow(r.id, app.pkg)
+                toast(if (app.pkg in r.apps) "${app.label} tolta da \"${r.name}\"" else "${app.label} in \"${r.name}\"")
+                shownCustomRows = null
+                states[Section.EXPLORE]?.let { if (current == Section.EXPLORE) bindBelow(it) }
+            }
+        }
+        p.button("＋  Nuova riga…") {
+            askText("Nome della nuova riga", "") { name ->
+                val r = collections.createRow(name)
+                collections.toggleInRow(r.id, app.pkg)
+                toast("Riga \"$name\" creata in Esplora")
+                shownCustomRows = null
+                states[Section.EXPLORE]?.let { if (current == Section.EXPLORE) bindBelow(it) }
+            }
+        }
+        p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
+    }
+
+    /**
+     * Folders or rows changed: rebuild "Tutte le app" and "Le tue righe" in place (no jump back
+     * to the top), with the focus on [focusLabel] (the folder or app just touched) if it's there.
+     */
+    private fun refreshGrid(focusKey: String?) {
+        val state = states[Section.EXPLORE] ?: return
+        state.rows.firstOrNull { it.key == "allapps" }?.apps = apps.grid()
+        shownBento = null
+        shownCustomRows = null
+        if (current != Section.EXPLORE) return
+        bindBelow(state)
+        if (focusKey != null) bento.postDelayed({
+            bentoTiles().firstOrNull { it.tag == focusKey }?.requestFocus()
+        }, 200)
+    }
+
+    /** A small pop-up with a text field (names of folders and rows). */
+    private fun askText(title: String, initial: String, done: (String) -> Unit) {
+        val input = EditText(this).apply {
+            setText(initial)
+            setSelection(initial.length)
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0x80FFFFFF.toInt())
+            hint = "Scrivi un nome"
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE or android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            setSingleLine()
+        }
+        val p = popup().title(title).view(input)
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        // the keyboard was forced open: close it with the pop-up, however it closes
+        p.onDismiss = { imm.hideSoftInputFromWindow(window.decorView.windowToken, 0) }
+        fun save() {
+            val v = input.text.toString().trim()
+            if (v.isEmpty()) return
+            imm.hideSoftInputFromWindow(input.windowToken, 0)
+            p.dismiss()
+            done(v)
+        }
+        input.setOnEditorActionListener { _, a, _ -> if (a == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { save(); true } else false }
+        p.button("Salva", keepOpen = true) { save() }
+        p.showCentered(page)
+        // after the pop-up has put its focus on the first button: the field takes it, keyboard up
+        input.postDelayed({
+            input.requestFocus()
+            imm.showSoftInput(input, InputMethodManager.SHOW_FORCED)
+        }, 250)
+    }
+
+    /** "Le tue righe" in Esplora, between Continua a guardare and Tutte le app. */
+    private var shownCustomRows: List<AppGroup>? = null
+    private val customRowViews = mutableListOf<View>()
+
+    private fun bindCustomRows(show: Boolean) {
+        val rows = if (show) collections.rows.filter { apps.get(it.apps).isNotEmpty() } else emptyList()
+        if (rows == shownCustomRows) return
+        shownCustomRows = rows
+        val holder = below as ViewGroup
+        customRowViews.forEach { holder.removeView(it) }
+        customRowViews.clear()
+        val dp = resources.displayMetrics.density
+        var at = holder.indexOfChild(findViewById<View>(R.id.bentoTitle))
+        rows.forEach { r ->
+            val title = TextView(this, null, 0, R.style.SectionTitle).apply {
+                text = r.name
+                layoutParams = android.widget.LinearLayout.LayoutParams(-2, -2).apply {
+                    marginStart = (44 * dp).toInt(); topMargin = (22 * dp).toInt()
+                }
+            }
+            val list = RowList(this).apply {
+                tag = "customRow"
+                layoutManager = StartAlignedLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL)
+                itemAnimator = null
+                clipChildren = false; clipToPadding = false
+                setPadding((44 * dp).toInt(), (10 * dp).toInt(), (44 * dp).toInt(), (10 * dp).toInt())
+                adapter = CardsAdapter(Row("custom_${r.id}", r.name, RowKind.APPS, apps = apps.get(r.apps)), this@MainActivity)
+            }
+            holder.addView(title, at++)
+            holder.addView(list, at++, android.widget.LinearLayout.LayoutParams(-1, -2))
+            customRowViews += title
+            customRowViews += list
         }
     }
 
