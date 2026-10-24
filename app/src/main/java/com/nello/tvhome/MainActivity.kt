@@ -1668,7 +1668,14 @@ class MainActivity : ComponentActivity(), Host {
             is AppInfo -> setCarouselInfo(head.label, "App")
             is RaceSession -> onRaceFocused(head)
             is TvShow -> onTvFocused(head)
-            else -> setCarouselInfo(if (state.ready[index]) "" else "Caricamento…", "")
+            else -> when {
+                !state.ready[index] -> setCarouselInfo("Caricamento…", "")
+                // TV tab with nothing to show: say why instead of an empty row
+                state.section == Section.TV && TvGuide.stale -> setCarouselInfo("Guida non aggiornata",
+                    if (TvGuide.downloadedAt == 0L) "Non riesco a scaricare la guida TV · riprovo tra poco"
+                    else "La fonte della guida TV non si è aggiornata · riprovo ogni 6 ore")
+                else -> setCarouselInfo("", "")
+            }
         }
         if (first && items.isNotEmpty() && !userMoved) focusFirstCard()
     }

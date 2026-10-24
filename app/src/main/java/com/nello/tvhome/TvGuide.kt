@@ -113,6 +113,14 @@ object TvGuide {
         sky("MTV.HD.it", "MTV", "Sky MTV"),
     )
 
+    /**
+     * The guide's state, for the TV tab: true when nothing is on air right now for our channels
+     * (the source stopped updating, or it couldn't be downloaded).
+     */
+    @Volatile var stale = false; private set
+    /** the newest download we have (0 = none) */
+    @Volatile var downloadedAt = 0L; private set
+
     private val lock = Mutex()
     private var cache: List<TvShow>? = null
     private var cacheAt = 0L
@@ -146,6 +154,9 @@ object TvGuide {
             all.sortedBy { it.start }
         }
         cache = list; cacheAt = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        stale = list.none { now in it.start until it.stop }
+        downloadedAt = FEEDS.indices.maxOfOrNull { File(context.cacheDir, "epg_it_$it.xml.gz").let { f -> if (f.exists()) f.lastModified() else 0L } } ?: 0L
         list
     }
 
