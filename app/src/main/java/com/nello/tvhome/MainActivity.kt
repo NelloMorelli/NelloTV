@@ -244,6 +244,10 @@ class MainActivity : ComponentActivity(), Host {
                 .filter { it.left >= dockList.paddingLeft - 4 }.minByOrNull { it.left }
         }
         dockList.itemAnimator = null
+        // the arrow follows the label's colour (dark under the focused pill)
+        catalogLabel.viewTreeObserver.addOnGlobalFocusChangeListener { _, _ ->
+            catalogLabel.post { refreshIcon.color = catalogLabel.currentTextColor }
+        }
         catalogLabel.setOnClickListener { if (current == Section.EXPLORE) refreshPerTe() else showCatalogPicker() }
         refreshDock()
 
@@ -1366,6 +1370,8 @@ class MainActivity : ComponentActivity(), Host {
         load(state)
     }
     private var refreshing = false
+    /** the spinning arrow before "Per te" */
+    private val refreshIcon by lazy { RefreshIcon((16 * resources.displayMetrics.density).toInt()) }
 
     /** "⟳ Altri per te": next batch of suggestions, back on the first card. */
     private fun refreshPerTe() {
@@ -1375,10 +1381,11 @@ class MainActivity : ComponentActivity(), Host {
         if (i < 0) return
         refreshing = true
         perTePage++
-        catalogLabel.text = "Aggiorno…"
+        refreshIcon.start()
         lifecycleScope.launch {
             val items = runCatching { perTe() }.getOrNull()
             refreshing = false
+            refreshIcon.stop()
             if (items != null) state.rows[i].items = items
             shownCatalog = null
             if (current == Section.EXPLORE) {
@@ -1625,12 +1632,19 @@ class MainActivity : ComponentActivity(), Host {
         }
         val row = state.rows.getOrNull(index) ?: return
         catalogLabel.text = when {
-            explore -> if (refreshing) "Aggiorno…" else "⟳  Per te"
+            explore -> "Per te"
             scrollsCatalogs(state.section) -> catalogLabelText(state, index)
             else -> "${row.title}  ▾"
         }
         // where ↑/↓ scroll the catalogs the label is only a title, not a button
         catalogLabel.isFocusable = !scrollsCatalogs(state.section)
+        // Esplora: the arrow sits before "Per te" and spins while it refreshes
+        if (explore) {
+            refreshIcon.setBounds(0, 0, refreshIcon.intrinsicWidth, refreshIcon.intrinsicHeight)
+            catalogLabel.setCompoundDrawablesRelative(refreshIcon, null, null, null)
+            catalogLabel.compoundDrawablePadding = (8 * resources.displayMetrics.density).toInt()
+            refreshIcon.color = catalogLabel.currentTextColor
+        } else catalogLabel.setCompoundDrawablesRelative(null, null, null, null)
         val list = scrollable(state)
         catalogDots.visibility = if (scrollsCatalogs(state.section) && list.size > 1) View.VISIBLE else View.GONE
         catalogDots.set(list.size, list.indexOf(index).coerceAtLeast(0), animate = dotsAnimate)
