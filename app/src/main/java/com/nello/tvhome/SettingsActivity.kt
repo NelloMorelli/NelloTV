@@ -380,6 +380,16 @@ class SettingsActivity : ComponentActivity() {
                     .onFailure { toast("Permesso mancante per cambiare il tempo") }
             }
         }
+        row("Widget del salvaschermo", listOf("match" to "Partita", "f1" to "F1", "news" to "Notizie").filter { ScreensaverView.enabled(this, it.first) }.joinToString(" · ") { it.second }.ifEmpty { "Nessuno" }) { v ->
+            val p = popup().title("Widget del salvaschermo", "In basso, sotto l'orologio")
+            listOf("match" to "Prossima partita della tua squadra", "f1" to "Prossima sessione di F1", "news" to "Notizie").forEach { (k, n) ->
+                p.button(if (ScreensaverView.enabled(this, k)) "✓  $n" else n) {
+                    Theme.edit(this).putBoolean("ss_$k", !ScreensaverView.enabled(this, k)).apply(); build()
+                }
+            }
+            p.showUnder(v)
+        }
+        row("Fonti delle notizie", News.chosen(this).size.let { "$it fonti" }) { v -> newsFeeds(v) }
         row("Prova salvaschermo", "›") {
             startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_SCREENSAVER))
             finish()
@@ -704,6 +714,32 @@ class SettingsActivity : ComponentActivity() {
         p.initialFocus = { input }
         p.showUnder(anchor)
         input.postDelayed({ imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_FORCED) }, 250)
+    }
+
+    private fun newsFeeds(anchor: View) {
+        val chosen = News.chosen(this)
+        val p = popup().title("Fonti delle notizie", "OK per attivare o disattivare")
+        News.PRESETS.forEach { (name, _) ->
+            p.button(if (name in chosen) "✓  $name" else name) {
+                News.setChosen(this, if (name in chosen) chosen - name else chosen + name)
+                build(); newsFeeds(rows[focusRow])
+            }
+        }
+        chosen.filter { c -> News.PRESETS.none { it.first == c } }.forEach { url ->
+            p.button("✓  ${url.substringAfter("://").substringBefore('/')}") { News.setChosen(this, chosen - url); build(); newsFeeds(rows[focusRow]) }
+        }
+        p.gap()
+        p.button("＋  Aggiungi un feed RSS…") {
+            askText(anchor, "Indirizzo del feed (RSS o Atom)", "https://") { url ->
+                if (!url.startsWith("http")) { toast("Indirizzo non valido"); return@askText }
+                lifecycleScope.launch {
+                    val ok = runCatching { News.parse(Net.get(url), "").isNotEmpty() }.getOrDefault(false)
+                    if (ok) { News.setChosen(this@SettingsActivity, News.chosen(this@SettingsActivity) + url); toast("Feed aggiunto"); build() }
+                    else toast("Nessuna notizia trovata a quell'indirizzo")
+                }
+            }
+        }
+        p.showUnder(anchor)
     }
 
     private fun renamePick(anchor: View) {

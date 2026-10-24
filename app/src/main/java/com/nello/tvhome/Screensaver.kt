@@ -21,6 +21,8 @@ import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
 import java.io.File
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,11 +34,7 @@ import java.util.Locale
  */
 class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(context) {
 
-    companion object {
-        const val BACKGROUND = "background_now.jpg"
-        /** after this long, let the Fire TV go to standby */
-        const val MAX_MS = 30 * 60_000L
-    }
+    // (constants in ScreensaverView.Widgets below)
 
     private val dp = resources.displayMetrics.density
     private val main = Handler(Looper.getMainLooper())
@@ -57,6 +55,12 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
         addView(date, LinearLayout.LayoutParams(-2, -2).apply { topMargin = (-14 * resources.displayMetrics.density).toInt() })
     }
 
+    private val widgets = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        alpha = 0f
+    }
+
     init {
         isFocusable = false
         if (withWallpaper) {
@@ -69,6 +73,83 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
         }
         addView(dim, LayoutParams(-1, -1))
         addView(clockBox, LayoutParams(-1, -2, Gravity.CENTER))
+        addView(widgets, LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+            setMargins((44 * dp).toInt(), 0, (44 * dp).toInt(), (40 * dp).toInt())
+        })
+    }
+
+    // ---------------------------------------------------------------- widgets
+    // A glass strip at the bottom: your team's next match, the next F1 session, and news
+    // headlines that change every 12 seconds. Each can be switched off in the settings.
+
+    companion object Widgets {
+        const val BACKGROUND = "background_now.jpg"
+        /** after this long, let the Fire TV go to standby */
+        const val MAX_MS = 30 * 60_000L
+        fun enabled(c: Context, key: String) = c.getSharedPreferences("theme", Context.MODE_PRIVATE).getBoolean("ss_$key", true)
+    }
+
+    private val scope = kotlinx.coroutines.MainScope()
+    private fun card(): LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((18 * dp).toInt(), (12 * dp).toInt(), (18 * dp).toInt(), (12 * dp).toInt())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0x33FFFFFF); cornerRadius = 18 * dp; setStroke(dp.toInt(), 0x33FFFFFF)
+        }
+    }
+    private fun label(text: String, size: Float, color: Int, font: android.graphics.Typeface = Fonts.regular) = TextView(context).apply {
+        this.text = text; textSize = size; setTextColor(color); typeface = font
+        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+    }
+    private var headlines: List<Headline> = emptyList()
+    private var headline = 0
+    private var newsTitle: TextView? = null
+    private var newsSource: TextView? = null
+
+    private fun addCard(title: String, main: String, weight: Float = 0f): Pair<TextView, TextView> {
+        val c = card()
+        val t = label(title.uppercase(), 11f, 0x99FFFFFF.toInt(), Fonts.medium).apply { letterSpacing = 0.1f }
+        val m = label(main, 16f, 0xFFFFFFFF.toInt(), Fonts.medium)
+        c.addView(t); c.addView(m, LinearLayout.LayoutParams(-2, -2).apply { topMargin = (2 * dp).toInt() })
+        widgets.addView(c, LinearLayout.LayoutParams(if (weight > 0) 0 else -2, -2, weight).apply {
+            if (widgets.childCount > 0) marginStart = (14 * dp).toInt()
+        })
+        return t to m
+    }
+
+    private fun loadWidgets() = scope.launch {
+        val c = context
+        val prefs = LauncherPrefs(c)
+        if (enabled(c, "match") && prefs.teamId != null) runCatching {
+            val m = Espn.teamToday(prefs.teamId).firstOrNull { it.state != "post" }
+            if (m != null) addCard(if (m.state == "in") "In diretta" else "Oggi · ${prefs.teamName}",
+                if (m.state == "in") "${m.home} ${m.homeScore ?: 0}–${m.awayScore ?: 0} ${m.away}" else "${m.home} – ${m.away} · ${Espn.kickoff(m)}")
+        }
+        if (enabled(c, "f1") && prefs.f1Team != null) runCatching {
+            val r = Espn.f1Sessions(0..2, practice = false).firstOrNull { it.state != "post" }
+            if (r != null) addCard("Formula 1", "${r.session} · ${Espn.kickoff(r.startMillis)}")
+        }
+        if (enabled(c, "news")) {
+            headlines = runCatching { News.headlines(c) }.getOrElse { emptyList() }
+            if (headlines.isNotEmpty()) {
+                val (t, m) = addCard(headlines[0].source, headlines[0].title, weight = 1f)
+                newsSource = t; newsTitle = m
+                main.postDelayed(::nextHeadline, 12_000)
+            }
+        }
+        if (widgets.childCount > 0) widgets.animate().alpha(1f).setStartDelay(1200).setDuration(1600).start()
+    }
+
+    private fun nextHeadline() {
+        if (headlines.size < 2) return
+        headline = (headline + 1) % headlines.size
+        val h = headlines[headline]
+        newsTitle?.animate()?.alpha(0f)?.setDuration(500)?.withEndAction {
+            newsTitle?.text = h.title
+            newsSource?.text = h.source.uppercase()
+            newsTitle?.animate()?.alpha(1f)?.setDuration(700)?.start()
+        }?.start()
+        main.postDelayed(::nextHeadline, 12_000)
     }
 
     fun start(onTimeout: () -> Unit) {
@@ -78,6 +159,7 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
         clockBox.animate().alpha(1f).translationY(0f).setStartDelay(700).setDuration(2400).setInterpolator(ease).start()
         main.postDelayed(::drift, 60_000)
         main.postDelayed(onTimeout, MAX_MS)
+        loadWidgets()
     }
 
     /** Hide the clock and lift the dimming (before the UI comes back). */
@@ -85,6 +167,8 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
         main.removeCallbacksAndMessages(null)
         clockBox.animate().cancel()
         clockBox.animate().alpha(0f).setStartDelay(0).setDuration(duration / 2).start()
+        widgets.animate().cancel()
+        widgets.animate().alpha(0f).setStartDelay(0).setDuration(duration / 2).start()
         dim.animate().cancel()
         dim.animate().alpha(0f).setDuration(duration).withEndAction(done).start()
     }
@@ -105,6 +189,7 @@ class ScreensaverView(context: Context, withWallpaper: Boolean) : FrameLayout(co
 
     override fun onDetachedFromWindow() {
         main.removeCallbacksAndMessages(null)
+        scope.cancel()
         super.onDetachedFromWindow()
     }
 }

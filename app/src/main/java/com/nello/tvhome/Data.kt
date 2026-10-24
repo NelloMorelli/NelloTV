@@ -142,6 +142,8 @@ object Net {
             }
             url.startsWith(BuildConfig.TOPX_BASE) -> 3 * HOUR
             url.startsWith("https://www.bing.com/HPImageArchive") -> 3 * HOUR
+            // news feeds (screensaver headlines)
+            Regex("rss|feed|\\.xml$").containsMatchIn(path) && !url.contains("epg") -> 20 * MIN
             // standings and team lists change at most a few times a day
             path.endsWith("/standings") || path.endsWith("/teams") -> 30 * MIN
             else -> 0
