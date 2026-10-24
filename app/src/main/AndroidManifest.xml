@@ -18,6 +18,8 @@
     <!-- local images for the wallpaper -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- backup file in Download (Android 9 and older) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- only to read the Wi-Fi network name (SSID); granted once via adb -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

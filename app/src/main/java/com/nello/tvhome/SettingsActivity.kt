@@ -130,7 +130,7 @@ class SettingsActivity : ComponentActivity() {
     /** which option to focus after a rebuild */
     private var focusRow = -1
 
-    private val sections = listOf("Generale", "Aspetto", "Schermata", "Dock e app", "Sport e TV", "Account", "Fire TV")
+    private val sections = listOf("Generale", "Aspetto", "Schermata", "Dock e app", "Sport e TV", "Account e backup", "Fire TV")
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -230,7 +230,11 @@ class SettingsActivity : ComponentActivity() {
 
     private val switchSection = Runnable { build(animate = true) }
 
+    /** false while build() parks the focus on the current section (no switching) */
+    private var selecting = true
+
     private fun selectSection(i: Int) {
+        if (!selecting) return
         if (i == section && content.childCount > 0) return
         section = i
         focusRow = -1
@@ -318,6 +322,9 @@ class SettingsActivity : ComponentActivity() {
 
     private fun build(animate: Boolean = false) {
         val hadFocus = content.hasFocus()
+        // while the rows are rebuilt the focus would fall back to the sidebar and switch section:
+        // park it on the current section's own entry first
+        if (hadFocus) { selecting = false; sectionViews[section].requestFocus(); selecting = true }
         content.removeAllViews()
         rows.clear()
         Theme.load(this)
@@ -549,6 +556,32 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun account() {
+        header("Backup")
+        row("Salva le impostazioni", "In Download ›") {
+            lifecycleScope.launch {
+                val r = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Backup.export(this@SettingsActivity) } }
+                r.onSuccess { toast("Salvato in Download: $it") }.onFailure { toast("Backup non riuscito: ${it.message}") }
+                build()
+            }
+        }
+        val found = runCatching { Backup.list(this) }.getOrElse { emptyList() }
+        row("Ripristina impostazioni", if (found.isEmpty()) "Nessun backup in Download" else "${found.size} backup ›") { v ->
+            if (found.isEmpty()) { toast("Copia un file NelloTV-backup in Download (ad esempio con LocalSend)"); return@row }
+            val p = popup().title("Ripristina", "Sostituisce le impostazioni attuali")
+            found.forEach { (name, uri) ->
+                p.button(name.removePrefix("NelloTV-backup-").removeSuffix(".json")) {
+                    val ok = runCatching { Backup.restore(this, uri) }.getOrDefault(false)
+                    if (!ok) { toast("Questo file non è un backup di Nello TV"); return@button }
+                    toast("Impostazioni ripristinate")
+                    // start fresh with everything restored
+                    startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                    finish()
+                    Runtime.getRuntime().exit(0)
+                }
+            }
+            p.showUnder(v)
+        }
+        note("Il file contiene dock, righe, cartelle, aspetto, squadra, playlist Sportio, account Nuvio e il tuo sfondo. Invialo all'altra Fire TV con LocalSend e ripristinalo da qui.")
         header("Nuvio")
         row("Account Nuvio", if (nuvio.isLinked) "Collegato · profilo ${nuvio.profileIndex}" else "Non collegato") { nuvioAccount(it) }
         note("Serve per Continua a guardare e per i consigli in Per te.")
