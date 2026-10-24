@@ -45,7 +45,19 @@ data class TvShow(
  * kept on disk; only the main free-to-air channels are read.
  */
 object TvGuide {
-    private const val FEED = "https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz"
+    /** main source (kept up to date, ~10 days ahead) and a fallback for anything it lacks */
+    private val FEEDS = listOf(
+        "https://iptv-epg.org/files/epg-it.xml.gz",
+        "https://epgshare01.online/epgshare01/epg_ripper_IT1.xml.gz",
+    )
+
+    /** "Sky.Sport..251.it", "SkySport251.it", "LA7.HD.it" → "skysport251", "la7": the same channel in any feed */
+    private fun norm(id: String): String {
+        val n = id.lowercase().replace(Regex("(\\.it)+$"), "").replace("+", "plus")
+            .replace(Regex("[^a-z0-9]"), "").replace(Regex("hd$"), "")
+        return ALIASES[n] ?: n
+    }
+    private val ALIASES = mapOf("mediaset20" to "20")
     private const val RAI = "it.rainet.androidcr"
     private const val MEDIASET = "it.mediaset.infinitytv1"
     /** channels without their own app installed: NeroZone (IPTV) */
@@ -105,12 +117,12 @@ object TvGuide {
     private var cache: List<TvShow>? = null
     private var cacheAt = 0L
 
-    private suspend fun file(context: Context): File = withContext(Dispatchers.IO) {
-        val f = File(context.cacheDir, "epg_it.xml.gz")
+    private suspend fun file(context: Context, index: Int): File = withContext(Dispatchers.IO) {
+        val f = File(context.cacheDir, "epg_it_$index.xml.gz")
         if (!f.exists() || System.currentTimeMillis() - f.lastModified() > 6 * 3600_000L) {
-            val tmp = File(context.cacheDir, "epg_it.tmp")
+            val tmp = File(context.cacheDir, "epg_it_$index.tmp")
             runCatching {
-                val c = URL(FEED).openConnection() as HttpURLConnection
+                val c = URL(FEEDS[index]).openConnection() as HttpURLConnection
                 c.connectTimeout = 10_000; c.readTimeout = 30_000
                 c.inputStream.use { i -> tmp.outputStream().use { i.copyTo(it) } }
                 tmp.renameTo(f)
@@ -122,16 +134,24 @@ object TvGuide {
     /** Every programme of the chosen channels from now to tomorrow morning. */
     suspend fun shows(context: Context): List<TvShow> = lock.withLock {
         cache?.let { if (System.currentTimeMillis() - cacheAt < 15 * 60_000L) return@withLock it }
-        val f = file(context)
-        if (!f.exists()) return@withLock emptyList()
-        val list = withContext(Dispatchers.Default) { parse(f) }
+        // the main feed first; the fallback only fills channels/hours the main one doesn't cover
+        val list = withContext(Dispatchers.Default) {
+            val all = ArrayList<TvShow>()
+            FEEDS.indices.forEach { k ->
+                val f = file(context, k)
+                if (!f.exists()) return@forEach
+                val part = runCatching { parse(f) }.getOrElse { emptyList() }
+                all += part.filter { p -> all.none { it.channel.id == p.channel.id && p.start < it.stop && p.stop > it.start } }
+            }
+            all.sortedBy { it.start }
+        }
         cache = list; cacheAt = System.currentTimeMillis()
         list
     }
 
     private fun parse(f: File): List<TvShow> {
         // the TV tab's channels plus the sports ones (to find which channel shows a match)
-        val byId = Sportio.channels.associateBy { it.id } + (skyCinema + skyEntertainment + channels).associateBy { it.id }
+        val byId = (Sportio.channels.associateBy { norm(it.id) } + (skyCinema + skyEntertainment + channels).associateBy { norm(it.id) })
         val logos = HashMap<String, String>()
         val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
         val now = System.currentTimeMillis()
@@ -146,7 +166,7 @@ object TvGuide {
             var channelId: String? = null
             while (p.next() != XmlPullParser.END_DOCUMENT) {
                 if (p.eventType == XmlPullParser.START_TAG) when (p.name) {
-                    "channel" -> channelId = p.getAttributeValue(null, "id")
+                    "channel" -> channelId = p.getAttributeValue(null, "id")?.let { norm(it) }
                     "icon" -> when {
                         ch != null -> if (image == null) image = p.getAttributeValue(null, "src")
                         channelId != null && channelId in byId && channelId !in logos ->
@@ -154,7 +174,7 @@ object TvGuide {
                     }
                     "programme" -> {
                         channelId = null
-                        ch = byId[p.getAttributeValue(null, "channel")]
+                        ch = byId[norm(p.getAttributeValue(null, "channel") ?: "")]
                         if (ch != null) {
                             start = runCatching { fmt.parse(p.getAttributeValue(null, "start"))!!.time }.getOrDefault(0)
                             stop = runCatching { fmt.parse(p.getAttributeValue(null, "stop"))!!.time }.getOrDefault(0)
@@ -170,7 +190,7 @@ object TvGuide {
                 }
             }
         }
-        return out.map { it.copy(channel = it.channel.copy(logo = logos[it.channel.id])) }.sortedBy { it.start }
+        return out.map { it.copy(channel = it.channel.copy(logo = logos[norm(it.channel.id)])) }.sortedBy { it.start }
     }
 
     /** What's on now, one per channel, in channel order. */

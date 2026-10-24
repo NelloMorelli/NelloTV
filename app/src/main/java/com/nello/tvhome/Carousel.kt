@@ -550,16 +550,16 @@ class CarouselAdapter(
             if (guide != null && guide.width >= guide.height) { fadeIn(tvArt) { tvArt.setImageBitmap(guide) }; return }
             Tmdb.backdropForTitle(t.title)?.let { tvArt.load(it) { crossfade(true) }; return }
             if (guide != null) {
-                // a tiny copy scaled back up is a cheap blur
-                val small = android.graphics.Bitmap.createScaledBitmap(guide, 12, (12f * guide.height / guide.width).toInt().coerceAtLeast(1), true)
-                fadeIn(tvArt) {
-                    tvArt.setImageBitmap(small)
-                    tvArt.colorFilter = android.graphics.PorterDuffColorFilter(0x66000000, android.graphics.PorterDuff.Mode.SRC_ATOP)
-                    tvPoster.setImageBitmap(guide)
-                }
+                // vertical cover: its upper part (faces, title) across the whole card
+                val h = (guide.width * 9 / 16).coerceAtMost(guide.height)
+                val top = ((guide.height - h) * 0.2f).toInt()
+                val crop = android.graphics.Bitmap.createBitmap(guide, 0, top, guide.width, h)
+                fadeIn(tvArt) { tvArt.setImageBitmap(crop) }
                 return
             }
-            t.channel.logo?.let { tvBigLogo.load(it) { crossfade(true) } }
+            // no picture anywhere: the channel's logo, large (only if this card still shows it)
+            val ch = t.channel.id
+            t.channel.logo?.let { tvBigLogo.load(it) { crossfade(true); listener(onSuccess = { _, _ -> if (boundChannel != ch) tvBigLogo.setImageDrawable(null) }) } }
         }
 
         private fun fadeIn(v: View, set: () -> Unit) {
@@ -569,7 +569,10 @@ class CarouselAdapter(
             if (tvPoster.drawable != null) { tvPoster.alpha = 0f; tvPoster.animate().alpha(1f).setDuration(400).start() }
         }
 
+        private var boundChannel: String? = null
+
         fun bindTv(t: TvShow) {
+            boundChannel = t.channel.id
             tvView
             tvChannel.text = t.channel.name
             tvLogo.dispose()
@@ -587,6 +590,8 @@ class CarouselAdapter(
             tvArt.setImageDrawable(null)
             tvArt.colorFilter = null
             tvPoster.setImageDrawable(null)
+            // a recycled card: drop any logo still loading for the previous channel
+            tvBigLogo.dispose()
             tvBigLogo.setImageDrawable(null)
             tvJob = scope.launch { tvImage(t) }
             card.contentDescription = "${t.channel.name}: ${t.title}"
