@@ -64,8 +64,8 @@ abstract class GlassPage : ComponentActivity() {
         dim = ColorDrawable(0xCC000000.toInt()).apply { alpha = 0 }
         val root = FrameLayout(this).apply {
             background = dim
-            addView(panel, FrameLayout.LayoutParams(dp(560), -1).apply { setMargins(dp(24), dp(24), 0, dp(24)) })
-            addView(indicator, FrameLayout.LayoutParams(dp(560), -1).apply { setMargins(dp(24), dp(24), 0, dp(24)) })
+            addView(panel, FrameLayout.LayoutParams(dp(560), -1).apply { setMargins(dp(44), dp(22), 0, dp(22)) })
+            addView(indicator, FrameLayout.LayoutParams(dp(560), -1).apply { setMargins(dp(44), dp(22), 0, dp(22)) })
         }
         setContentView(root)
         from = intent.getParcelableExtra<Rect>(EXTRA_FROM)?.let { RectF(it) }

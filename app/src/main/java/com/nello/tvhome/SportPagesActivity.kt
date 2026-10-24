@@ -64,7 +64,7 @@ class SportPagesActivity : GlassPage() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(8))
+            setPadding(dp(14), dp(8), dp(14), dp(8))
             if (!header) {
                 isFocusable = true
                 // the page's liquid pill marks the focused row
@@ -91,7 +91,7 @@ class SportPagesActivity : GlassPage() {
         this.text = text
         textSize = 14f
         setTextColor(getColor(R.color.text_dim))
-        setPadding(dp(16), dp(8), dp(16), dp(8))
+        setPadding(dp(14), dp(8), dp(14), dp(8))
         isFocusable = true
     })
 

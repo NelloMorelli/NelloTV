@@ -61,13 +61,13 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
             textSize = 16f
             typeface = Fonts.medium
             setTextColor(0xFFFFFFFF.toInt())
-            setPadding(px(6), 0, px(6), 0)
+            setPadding(px(14), 0, px(14), 0)
         })
         if (subtitle != null) body.addView(TextView(context).apply {
             this.text = subtitle
             textSize = 12f
             setTextColor(0x99FFFFFF.toInt())
-            setPadding(px(6), px(2), px(6), 0)
+            setPadding(px(14), px(2), px(14), 0)
         })
         body.addView(View(context), LinearLayout.LayoutParams(-1, px(8)))
     }
@@ -80,7 +80,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     fun hero(state: String, detail: String): TextView {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(px(6), px(2), px(6), px(10))
+            setPadding(px(14), px(2), px(14), px(10))
         }
         col.addView(TextView(context).apply {
             text = state
@@ -106,7 +106,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     fun info(label: String, value: String): TextView {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(px(6), px(3), px(6), px(3))
+            setPadding(px(14), px(3), px(14), px(3))
         }
         row.addView(TextView(context).apply {
             text = label
@@ -130,7 +130,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
             textSize = 13f
             setLineSpacing(0f, 1.15f)
             setTextColor(context.getColor(R.color.text_dim))
-            setPadding(px(4), 0, px(4), px(6))
+            setPadding(px(14), 0, px(14), px(6))
         })
     }
 
@@ -141,7 +141,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     /** a hairline between groups */
     fun gap() = apply {
         body.addView(View(context).apply { setBackgroundColor(0x1FFFFFFF) }, LinearLayout.LayoutParams(-1, px(1)).apply {
-            setMargins(px(8), px(6), px(8), px(6))
+            setMargins(px(14), px(6), px(14), px(6))
         })
     }
 
@@ -210,7 +210,8 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
         card.measure(View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
         val available = content.height - ay - px(24)
         val height = minOf(card.measuredHeight, available)
-        val left = if (alignEnd) ax + anchor.width - widthPx else ax
+        // aligned to what you see of the anchor: its text, not its padding (a label), or its edge
+        val left = if (alignEnd) ax + anchor.width - anchor.paddingRight - widthPx else ax + anchor.paddingLeft
         val root = object : android.widget.FrameLayout(context) {
             // focus never leaves the card
             override fun focusSearch(focused: View?, direction: Int): View? {

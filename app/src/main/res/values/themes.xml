@@ -51,7 +51,7 @@
     <style name="SectionTitle">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginStart">48dp</item>
+        <item name="android:layout_marginStart">44dp</item>
         <item name="android:layout_marginTop">22dp</item>
         <item name="android:fontFamily">@font/poppins_medium</item>
         <item name="android:shadowColor">#CC000000</item>
