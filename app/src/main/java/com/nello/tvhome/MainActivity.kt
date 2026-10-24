@@ -762,6 +762,10 @@ class MainActivity : ComponentActivity(), Host {
             if (event.action == android.view.KeyEvent.ACTION_UP) stopScreensaver()
             return true
         }
+        if (moving != null) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) moveKey(event.keyCode)
+            return true
+        }
         if (event.action == android.view.KeyEvent.ACTION_DOWN) resetIdle()
         if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) NavSound.select()
@@ -857,6 +861,13 @@ class MainActivity : ComponentActivity(), Host {
         // missed 3:00 (asleep or off): the new suggestions come now
         dailyRefresh()
         scheduleNightly()
+        // grid order or dock options changed in Impostazioni
+        val gridKey = "${apps.gridOrder}:${apps.dockMax}"
+        if (seenGridKey != null && gridKey != seenGridKey) { apps.invalidate(); refreshGrid(null); refreshSportApps() }
+        seenGridKey = gridKey
+        refreshDock()
+        // an app image chosen in the picker
+        if (apps.imagesVersion != seenImages) { if (seenImages != 0L) appImagesChanged(); seenImages = apps.imagesVersion }
         // back from Sportio: the VPN we switched on goes off again
         Sportio.wireguardDownIfOurs(this)
         idleHandler.removeCallbacks(wallpaperTick)
@@ -1521,17 +1532,29 @@ class MainActivity : ComponentActivity(), Host {
         val dp = resources.displayMetrics.density
         val gap = (14 * dp).toInt()
         val width = resources.displayMetrics.widthPixels - bento.paddingLeft - bento.paddingRight
-        var i = 0
+        // rows alternate 7 small / 3 large; an app set to "large" or "small" only goes in that kind
+        // of row (in its order), the others fill whatever comes
+        val left = all.toMutableList()
+        val rowsOut = mutableListOf<Pair<Boolean, List<AppInfo>>>()
         var small = true
-        while (i < all.size) {
+        while (left.isNotEmpty()) {
             val n = if (small) 7 else 3
+            val fits = left.filter { a -> apps.tileSize(a.pkg).let { sz -> sz == "auto" || (sz == "small") == small } }.take(n)
+            if (fits.isEmpty()) { small = !small; continue }
+            left.removeAll(fits.toSet())
+            rowsOut += small to fits
+            small = !small
+        }
+        var i = 0
+        for ((isSmall, chunk) in rowsOut) {
+            val n = if (isSmall) 7 else 3
+            small = isSmall
             val w = (width - gap * (n - 1)) / n
             val h = w * 9 / 16
             val row = android.widget.LinearLayout(this).apply {
                 orientation = android.widget.LinearLayout.HORIZONTAL
                 clipChildren = false
             }
-            val chunk = all.subList(i, minOf(i + n, all.size))
             chunk.forEachIndexed { k, app ->
                 val tile = appTile(app, small).apply { id = View.generateViewId() }
                 // left/right stop at the ends of the row instead of jumping to another row
@@ -1542,8 +1565,7 @@ class MainActivity : ComponentActivity(), Host {
                 })
             }
             bento.addView(row, android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = if (i == 0) (10 * dp).toInt() else gap })
-            i += n
-            small = !small
+            i += chunk.size
         }
     }
 
@@ -1800,8 +1822,14 @@ class MainActivity : ComponentActivity(), Host {
     /** Favourite apps in the dock at the bottom of the single-screen tabs. */
     private fun refreshDock(keepFocusOn: String? = null) {
         val favs = apps.get(apps.dock(sportDock))
-        if (favs.map { it.pkg } == dockApps) return
-        dockApps = favs.map { it.pkg }
+        // also rebuilt when the dock's size or names change, or an app image does
+        val key = favs.map { it.pkg } + "${apps.dockScale}:${apps.dockLabels}:${apps.imagesVersion}"
+        if (key == dockApps) return
+        dockApps = key
+        CardsAdapter.dockScale = apps.dockScale
+        CardsAdapter.dockLabels = apps.dockLabels
+        val dp = resources.displayMetrics.density
+        findViewById<View>(R.id.dock).updateLayoutParams<ViewGroup.MarginLayoutParams> { height = ((72 * apps.dockScale + 22) * dp).toInt() }
         // rebuilding the dock drops the focus: keep it on the same app (or same slot) so it doesn't
         // fall onto the first tab and switch section
         val focusedPkg = keepFocusOn ?: if (dockList.hasFocus()) dockList.focusedChild?.contentDescription?.toString() else null
@@ -2185,10 +2213,9 @@ class MainActivity : ComponentActivity(), Host {
         val inDock = app.pkg in apps.dock(sportDock)
         val p = popup().title(app.label, if (inDock) (if (sportDock) "Nel dock Sport" else "Nel dock") else null)
         p.button("Apri") { onAppClicked(app) }
+        val inGrid = bentoTiles().any { it.tag == app.pkg }
+        if (inDock || inGrid) p.button("Sposta") { startMove(app, inDock) }
         if (inDock) {
-            val pos = apps.dock(sportDock).indexOf(app.pkg)
-            if (pos > 0) p.button("← Sposta a sinistra") { apps.moveInDock(app.pkg, -1, sportDock); refreshDock(app.label) }
-            if (pos < apps.dock(sportDock).size - 1) p.button("Sposta a destra →") { apps.moveInDock(app.pkg, +1, sportDock); refreshDock(app.label) }
             p.button("Rimuovi dal dock") {
                 apps.removeFromDock(app.pkg, sportDock)
                 toast("${app.label} rimossa dal dock")
@@ -2223,6 +2250,26 @@ class MainActivity : ComponentActivity(), Host {
             } else p.button("Metti in una cartella…") { chooseFolder(app) }
             p.button("Aggiungi a una riga…") { chooseRow(app) }
         }
+        if (inGrid && current != Section.SPORT) {
+            val size = apps.tileSize(app.pkg)
+            p.button(when (size) { "big" -> "Dimensione: grande"; "small" -> "Dimensione: piccola"; else -> "Dimensione: automatica" }) {
+                val next = when (size) { "auto" -> "big"; "big" -> "small"; else -> "auto" }
+                apps.setTileSize(app.pkg, next)
+                toast(when (next) { "big" -> "${app.label} grande"; "small" -> "${app.label} piccola"; else -> "${app.label}: dimensione automatica" })
+                refreshGrid(app.pkg)
+            }
+        }
+        if (app.pkg != Apps.SETTINGS) {
+            p.button("Cambia immagine…") {
+                imageFor = app.pkg
+                openPage(Intent(this, WallpaperPickerActivity::class.java).putExtra(WallpaperPickerActivity.EXTRA_APP, app.pkg).putExtra(WallpaperPickerActivity.EXTRA_APP_NAME, app.label))
+            }
+            if (apps.hasCustomImage(app.pkg)) p.button("Immagine originale") {
+                apps.clearCustomImage(app.pkg)
+                imageFor = app.pkg
+                appImagesChanged()
+            }
+        }
         if (app.pkg != Apps.SETTINGS) p.button("Nascondi app") {
             apps.hide(app.pkg)
             toast("${app.label} nascosta · la trovi in \"App nascoste\"")
@@ -2230,6 +2277,102 @@ class MainActivity : ComponentActivity(), Host {
         }
         p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
     }
+
+    // ---------------------------------------------------------------- free move
+
+    /** the app being moved, and whether it's in the dock (else the grid) */
+    private var moving: AppInfo? = null
+    private var movingInDock = false
+
+    /** "Sposta": the tile lifts; arrows move it, OK or Back drops it. */
+    private fun startMove(app: AppInfo, inDock: Boolean) {
+        moving = app
+        movingInDock = inDock
+        if (!inDock && current != Section.SPORT && apps.gridOrder != "custom") {
+            // moving by hand means your own order, starting from the one on screen
+            apps.gridCustom = bentoTiles().mapNotNull { it.tag as? String }
+            apps.gridOrder = "custom"
+        }
+        toast(if (inDock) "← → per spostare · OK per lasciare" else "← → ↑ ↓ per spostare · OK per lasciare")
+        window.decorView.postDelayed({ liftMoving(true) }, 350)
+    }
+
+    private fun movingView(): View? {
+        val m = moving ?: return null
+        return if (movingInDock) (0 until dockList.childCount).map { dockList.getChildAt(it) }.firstOrNull { it.contentDescription == m.label }
+        else bentoTiles().firstOrNull { it.tag == m.pkg }
+    }
+
+    private fun liftMoving(on: Boolean) {
+        val v = movingView() ?: return
+        v.requestFocus()
+        val sc = if (on) 1.14f else 1f
+        v.animate().scaleX(sc).scaleY(sc).translationY(if (on) -8 * resources.displayMetrics.density else 0f)
+            .setDuration(360).setInterpolator(android.view.animation.PathInterpolator(0.2f, 0.9f, 0.25f, 1.1f)).start()
+        v.elevation = if (on) 24 * resources.displayMetrics.density else 0f
+    }
+
+    /** Arrow keys while moving: returns true when consumed. */
+    private fun moveKey(code: Int): Boolean {
+        val m = moving ?: return false
+        when (code) {
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_BACK -> {
+                liftMoving(false)
+                moving = null
+                toast("${m.label} spostata")
+                return true
+            }
+        }
+        val dir = when (code) {
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -1
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> -100
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> 100
+            else -> return true
+        }
+        if (movingInDock) {
+            if (dir == 1 || dir == -1) { apps.moveInDock(m.pkg, dir, sportDock); refreshDock(m.label) }
+            window.decorView.postDelayed({ liftMoving(true) }, 160)
+            return true
+        }
+        // grid: left/right one place, up/down to the same column in the row above/below
+        val rows = (0 until bento.childCount).map { r -> (bento.getChildAt(r) as ViewGroup).let { g -> (0 until g.childCount).map { g.getChildAt(it).tag as? String } } }
+        val flat = rows.flatten().filterNotNull()
+        val from = flat.indexOf(m.pkg)
+        if (from < 0) return true
+        val target = if (dir == 1 || dir == -1) from + dir else {
+            val r = rows.indexOfFirst { m.pkg in it }
+            val col = rows[r].indexOf(m.pkg)
+            val tr = r + dir / 100
+            if (tr !in rows.indices) return true
+            val before = rows.take(tr).sumOf { it.size }
+            before + (col * rows[tr].size / rows[r].size.coerceAtLeast(1)).coerceIn(0, rows[tr].size - 1)
+        }
+        if (target !in flat.indices || target == from) return true
+        val order = flat.toMutableList().apply { add(target, removeAt(from)) }
+        if (current == Section.SPORT) {
+            apps.sportApps = order.filter { !it.startsWith(Collections.FOLDER) && it != Apps.HIDDEN_TILE }
+            refreshSportApps()
+        } else {
+            apps.gridCustom = order
+            refreshGrid(m.pkg)
+        }
+        window.decorView.postDelayed({ liftMoving(true) }, 260)
+        return true
+    }
+
+    /** An app's image changed (picker or "Immagine originale"): dock and grid redrawn. */
+    private fun appImagesChanged() {
+        apps.invalidate()
+        refreshDock()
+        // back on the app whose image changed
+        refreshGrid(imageFor)
+        refreshSportApps()
+        imageFor = null
+    }
+    private var imageFor: String? = null
+    private var seenImages = 0L
+    private var seenGridKey: String? = null
 
     /** Update the Sport tab's "App sport" grid in place. */
     private fun bentoTiles(): List<View> =
@@ -2425,12 +2568,13 @@ class MainActivity : ComponentActivity(), Host {
         }
         input.setOnEditorActionListener { _, a, _ -> if (a == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { save(); true } else false }
         p.button("Salva", keepOpen = true) { save() }
+        // the field gets the focus when the pop-up opens (not "Salva"), then the keyboard
+        p.initialFocus = { input }
         p.showCentered(page)
-        // after the pop-up has put its focus on the first button: the field takes it, keyboard up
         input.postDelayed({
-            input.requestFocus()
-            imm.showSoftInput(input, InputMethodManager.SHOW_FORCED)
-        }, 250)
+            if (!input.hasFocus()) input.requestFocus()
+            if (input.hasFocus()) imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }, 350)
     }
 
     /** "Le tue righe" in Esplora, between Continua a guardare and Tutte le app. */

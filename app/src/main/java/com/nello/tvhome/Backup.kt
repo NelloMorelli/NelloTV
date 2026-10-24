@@ -61,6 +61,10 @@ object Backup {
         File(c.filesDir, WallpaperPickerActivity.CUSTOM_FILE).takeIf { it.exists() }?.let {
             root.put("wallpaper", Base64.encodeToString(it.readBytes(), Base64.NO_WRAP))
         }
+        // app images you chose
+        val imgs = JSONObject()
+        File(c.filesDir, "appimg").listFiles()?.forEach { f -> imgs.put(f.name, Base64.encodeToString(f.readBytes(), Base64.NO_WRAP)) }
+        if (imgs.length() > 0) root.put("appImages", imgs)
         val name = "NelloTV-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd-HHmm", java.util.Locale.US).format(java.util.Date()) + ".json"
         val bytes = root.toString().toByteArray()
         val values = ContentValues().apply {
@@ -96,6 +100,10 @@ object Backup {
         FILES.forEach { name -> prefs.optJSONObject(name)?.let { load(c, name, it) } }
         root.optString("wallpaper").takeIf { it.isNotEmpty() }?.let {
             File(c.filesDir, WallpaperPickerActivity.CUSTOM_FILE).writeBytes(Base64.decode(it, Base64.NO_WRAP))
+        }
+        root.optJSONObject("appImages")?.let { imgs ->
+            val dir = File(c.filesDir, "appimg").apply { mkdirs() }
+            imgs.keys().forEach { k -> File(dir, k).writeBytes(Base64.decode(imgs.getString(k), Base64.NO_WRAP)) }
         }
         return true
     }

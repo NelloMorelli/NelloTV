@@ -148,6 +148,12 @@ class RowsAdapter(private val host: Host) : RecyclerView.Adapter<RowsAdapter.VH>
 
 class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
+    companion object {
+        /** dock options (Impostazioni → Dock e app) */
+        var dockScale = 1f
+        var dockLabels = false
+    }
+
     override fun getItemCount() = row.size
     override fun getItemViewType(position: Int) = row.kind.ordinal
 
@@ -164,7 +170,7 @@ class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.
         v.findViewById<View>(R.id.progressFill).background = Theme.progressFill(parent.context)
         val (w, h) = when (kind) {
             RowKind.APPS -> 160 to 90
-            RowKind.DOCK -> 128 to 72
+            RowKind.DOCK -> (128 * dockScale).toInt() to (72 * dockScale).toInt()
             RowKind.POSTER -> 112 to 168
             else -> 208 to 117
         }
@@ -214,8 +220,17 @@ class CardsAdapter(private val row: Row, private val host: Host) : RecyclerView.
             h.image.scaleType = ImageView.ScaleType.CENTER_CROP
             h.image.setPadding(0, 0, 0, 0)
             h.image.setImageDrawable(app.banner)
-            h.label.visibility = View.GONE
-            h.shade.visibility = View.GONE
+            // dock with names on: the name over a soft shade at the bottom of the tile
+            val named = row.kind == RowKind.DOCK && dockLabels
+            h.label.visibility = if (named) View.VISIBLE else View.GONE
+            h.shade.visibility = if (named) View.VISIBLE else View.GONE
+            if (named) {
+                h.label.text = app.label
+                h.label.maxLines = 1
+                h.label.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                h.label.textSize = 10f
+                setLabelBottom(h, 4)
+            }
         } else {
             // icon-only app: icon in the upper part, name underneath
             h.image.scaleType = ImageView.ScaleType.FIT_CENTER

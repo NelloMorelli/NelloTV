@@ -118,6 +118,8 @@ class Collections(context: Context) {
         set(v) = prefs.edit().putString("recents", v.take(RECENTS_MAX).joinToString(",")).apply()
 
     fun used(pkg: String) {
+        // launch count, for "Più usate"
+        prefs.edit().putInt("uses_$pkg", prefs.getInt("uses_$pkg", 0) + 1).apply()
         val r = recents
         if (r.firstOrNull() == pkg) return
         recents = listOf(pkg) + (r - pkg)

@@ -28,9 +28,14 @@ class WallpaperPickerActivity : GlassPage() {
 
     private class Pic(val uri: Uri, val name: String, val folder: String)
 
+    /** set when choosing an app's tile image instead of the wallpaper */
+    private var forApp: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title("Scegli uno sfondo", "Immagini sulla Fire TV · inviale con LocalSend o scaricale con Downloader")
+        forApp = intent.getStringExtra(EXTRA_APP)
+        if (forApp != null) title("Immagine per ${intent.getStringExtra(EXTRA_APP_NAME)}", "Viene ritagliata in 16:9 · inviale con LocalSend o scaricale con Downloader")
+        else title("Scegli uno sfondo", "Immagini sulla Fire TV · inviale con LocalSend o scaricale con Downloader")
         if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 1)
         } else load()
@@ -58,7 +63,7 @@ class WallpaperPickerActivity : GlassPage() {
             }
             var first: android.view.View? = null
             // whole folders, for "Le tue immagini a rotazione"
-            val folders = pics.groupBy { it.folder }.filter { it.value.size >= 2 }
+            val folders = if (forApp != null) emptyMap() else pics.groupBy { it.folder }.filter { it.value.size >= 2 }
             if (folders.isNotEmpty()) {
                 header("A rotazione")
                 folders.forEach { (folder, list) ->
@@ -109,6 +114,23 @@ class WallpaperPickerActivity : GlassPage() {
     }
 
     private fun choose(pic: Pic) {
+        forApp?.let { pkg ->
+            lifecycleScope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val src = decodeScaled(this@WallpaperPickerActivity, pic.uri) ?: error("decode")
+                        // centre crop to 16:9, 640×360
+                        val h = minOf(src.height, src.width * 9 / 16)
+                        val w = h * 16 / 9
+                        val crop = Bitmap.createBitmap(src, (src.width - w) / 2, (src.height - h) / 2, w, h)
+                        Apps(this@WallpaperPickerActivity).setCustomImage(pkg, Bitmap.createScaledBitmap(crop, 640, 360, true))
+                    }.isSuccess
+                }
+                Toast.makeText(this@WallpaperPickerActivity, if (ok) "Immagine impostata" else "Impossibile leggere l'immagine", Toast.LENGTH_SHORT).show()
+                if (ok) finish()
+            }
+            return
+        }
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) { runCatching { copyScaled(pic.uri) }.isSuccess }
             if (!ok) {
@@ -139,6 +161,8 @@ class WallpaperPickerActivity : GlassPage() {
 
     companion object {
         const val CUSTOM_FILE = "wallpaper_custom.jpg"
+        const val EXTRA_APP = "app"
+        const val EXTRA_APP_NAME = "app_name"
 
         /** The pictures of a folder (MediaStore relative path), by name. */
         fun folderImages(c: android.content.Context, folder: String): List<Uri> {

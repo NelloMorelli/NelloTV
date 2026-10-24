@@ -504,8 +504,31 @@ class SettingsActivity : ComponentActivity() {
 
     private fun dockAndApps() {
         header("Dock")
-        row("Dock", "${apps.get(apps.dock()).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it) }
-        row("Dock Sport", "${apps.get(apps.dock(true)).size}/${Apps.DOCK_MAX} app") { reorderFavourites(it, sport = true) }
+        row("Dock", "${apps.get(apps.dock()).size}/${apps.dockMax} app") { reorderFavourites(it) }
+        row("Dock Sport", "${apps.get(apps.dock(true)).size}/${apps.dockMax} app") { reorderFavourites(it, sport = true) }
+        header("Aspetto del dock")
+        val counts = listOf(4, 5, 6, 7)
+        row("App nel dock", "${apps.dockMax}") { v ->
+            pick(v, "App nel dock", counts.map { "$it app" }, counts.indexOf(apps.dockMax)) { i ->
+                apps.dockMax = counts[i]
+                // fewer places: the extra apps leave the dock
+                apps.setDock(apps.dock(false)); apps.setDock(apps.dock(true), true)
+            }
+        }
+        val scales = listOf(0.85f to "Piccole", 1f to "Normali", 1.15f to "Grandi")
+        row("Dimensione delle app", scales.firstOrNull { it.first == apps.dockScale }?.second ?: "Normali") { v ->
+            pick(v, "Dimensione delle app nel dock", scales.map { it.second }, scales.indexOfFirst { it.first == apps.dockScale }) { i -> apps.dockScale = scales[i].first }
+        }
+        row("Nomi sulle app", if (apps.dockLabels) "Sì" else "No") { apps.dockLabels = !apps.dockLabels; build() }
+        header("Griglia delle app")
+        val orders = listOf("az" to "Alfabetico", "used" to "Più usate", "custom" to "Personalizzato")
+        row("Ordine", orders.first { it.first == apps.gridOrder }.second) { v ->
+            pick(v, "Ordine della griglia", orders.map { it.second }, orders.indexOfFirst { it.first == apps.gridOrder }) { i ->
+                if (orders[i].first == "custom" && apps.gridCustom.isEmpty()) apps.gridCustom = apps.grid().map { it.pkg }
+                apps.gridOrder = orders[i].first
+            }
+        }
+        note("Personalizzato: tieni premuto OK su un'app e scegli Sposta. Lì puoi anche renderla grande o piccola e cambiarle l'immagine.")
         header("Righe e cartelle")
         val col = Collections(this)
         row("Le tue righe", col.rows.size.let { if (it == 0) "Nessuna" else "$it in Esplora" }) { v -> customRows(v) }
@@ -746,7 +769,7 @@ class SettingsActivity : ComponentActivity() {
         p.button("Salva", keepOpen = true) { save() }
         p.initialFocus = { input }
         p.showUnder(anchor)
-        input.postDelayed({ imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_FORCED) }, 250)
+        input.postDelayed({ if (!input.hasFocus()) input.requestFocus(); if (input.hasFocus()) imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT) }, 350)
     }
 
     private fun newsFeeds(anchor: View) {
@@ -810,7 +833,7 @@ class SettingsActivity : ComponentActivity() {
     /** Dock management: the 5 apps in order, each movable/removable, plus "Aggiungi app". */
     private fun reorderFavourites(anchor: View, sport: Boolean = false) {
         val favs = apps.get(apps.dock(sport))
-        val p = popup().title(if (sport) "Dock Sport" else "Dock", "${favs.size}/${Apps.DOCK_MAX} app · scegli un'app da spostare o togliere")
+        val p = popup().title(if (sport) "Dock Sport" else "Dock", "${favs.size}/${apps.dockMax} app · scegli un'app da spostare o togliere")
         favs.forEachIndexed { i, app ->
             p.button("${i + 1}.  ${app.label}") { favouriteActions(anchor, app, sport) }
         }

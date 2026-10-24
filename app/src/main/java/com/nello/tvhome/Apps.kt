@@ -75,7 +75,18 @@ class Apps(private val context: Context) {
             val members = get(f.apps)
             if (members.isEmpty()) null else AppInfo(Collections.FOLDER + f.id, f.name, null, folderIcon(members))
         }
-        val sorted = tiles.sortedWith(compareBy(Collator.getInstance(Locale.ITALY)) { it.label })
+        val az = tiles.sortedWith(compareBy(Collator.getInstance(Locale.ITALY)) { it.label })
+        val sorted = when (gridOrder) {
+            "used" -> az.sortedByDescending { t ->
+                // a folder counts as much as its most used app
+                if (t.pkg.startsWith(Collections.FOLDER)) folders.firstOrNull { Collections.FOLDER + it.id == t.pkg }?.apps?.maxOfOrNull { uses(it) } ?: 0 else uses(t.pkg)
+            }
+            "custom" -> {
+                val order = gridCustom
+                az.sortedBy { t -> order.indexOf(t.pkg).let { if (it < 0) Int.MAX_VALUE else it } }
+            }
+            else -> az
+        }
         val count = hidden.count { it in installed() }
         return if (count == 0) sorted
         else sorted + AppInfo(HIDDEN_TILE, "App nascoste ($count)", null, context.getDrawable(android.R.drawable.ic_menu_view))
@@ -125,11 +136,15 @@ class Apps(private val context: Context) {
                 val pkg = ri.activityInfo.packageName
                 if (pkg == context.packageName || pkg in result) continue
                 val ai = ri.activityInfo
+                val custom = imageFile(pkg).takeIf { it.exists() }?.let {
+                    android.graphics.BitmapFactory.decodeFile(it.path)?.let { b -> android.graphics.drawable.BitmapDrawable(context.resources, b) }
+                }
                 result[pkg] = AppInfo(
                     pkg = pkg,
                     // a name chosen in Personalizza wins
                     label = names.getString(pkg, null) ?: ri.loadLabel(pm).toString(),
-                    banner = ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm),
+                    // your own image wins over the app's banner
+                    banner = custom ?: ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm),
                     icon = ri.loadIcon(pm),
                 )
             }
@@ -212,14 +227,66 @@ class Apps(private val context: Context) {
     }
 
     fun setDock(value: List<String>, sport: Boolean = false) =
-        prefs.edit().putString(if (sport) "dock_sport" else "favourites", value.take(DOCK_MAX).joinToString(",")).apply()
+        prefs.edit().putString(if (sport) "dock_sport" else "favourites", value.take(dockMax).joinToString(",")).apply()
+
+    // ---------------------------------------------------------------- dock options
+
+    /** how many apps the dock holds (4–7) */
+    var dockMax: Int
+        get() = prefs.getInt("dockMax", DOCK_MAX)
+        set(v) = prefs.edit().putInt("dockMax", v.coerceIn(4, 7)).apply()
+    /** dock tile size: 0.85 small, 1 normal, 1.15 large */
+    var dockScale: Float
+        get() = prefs.getFloat("dockScale", 1f)
+        set(v) = prefs.edit().putFloat("dockScale", v).apply()
+    /** app names written on the dock tiles */
+    var dockLabels: Boolean
+        get() = prefs.getBoolean("dockLabels", false)
+        set(v) = prefs.edit().putBoolean("dockLabels", v).apply()
+
+    // ---------------------------------------------------------------- grid order and sizes
+
+    /** "az", "used" (most opened first) or "custom" (your own order) */
+    var gridOrder: String
+        get() = prefs.getString("gridOrder", "az")!!
+        set(v) = prefs.edit().putString("gridOrder", v).apply()
+    /** the custom order (packages and folders), as last arranged */
+    var gridCustom: List<String>
+        get() = prefs.getString("gridCustom", "")!!.split(',').filter { it.isNotBlank() }
+        set(v) = prefs.edit().putString("gridCustom", v.joinToString(",")).apply()
+    fun uses(pkg: String) = prefs.getInt("uses_$pkg", 0)
+
+    /** "big", "small" or "auto" (the grid alternates) */
+    fun tileSize(pkg: String): String = when (pkg) {
+        in prefs.getStringSet("bigApps", emptySet())!! -> "big"
+        in prefs.getStringSet("smallApps", emptySet())!! -> "small"
+        else -> "auto"
+    }
+    fun setTileSize(pkg: String, size: String) {
+        val big = prefs.getStringSet("bigApps", emptySet())!! - pkg
+        val small = prefs.getStringSet("smallApps", emptySet())!! - pkg
+        prefs.edit().putStringSet("bigApps", if (size == "big") big + pkg else big)
+            .putStringSet("smallApps", if (size == "small") small + pkg else small).apply()
+    }
+
+    // ---------------------------------------------------------------- custom images
+
+    private fun imageFile(pkg: String) = java.io.File(java.io.File(context.filesDir, "appimg").apply { mkdirs() }, "$pkg.png")
+    fun hasCustomImage(pkg: String) = imageFile(pkg).exists()
+    fun setCustomImage(pkg: String, bmp: android.graphics.Bitmap) {
+        imageFile(pkg).outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        imagesChanged()
+    }
+    fun clearCustomImage(pkg: String) { imageFile(pkg).delete(); imagesChanged() }
+    private fun imagesChanged() { prefs.edit().putLong("imagesVersion", System.currentTimeMillis()).apply(); invalidate() }
+    val imagesVersion get() = prefs.getLong("imagesVersion", 0)
 
     /** The main dock (Esplora, Film, Serie TV). */
     var favourites: List<String>
         get() = dock(false)
         set(value) = setDock(value, false)
 
-    fun dockFull(sport: Boolean = false) = dock(sport).size >= DOCK_MAX
+    fun dockFull(sport: Boolean = false) = dock(sport).size >= dockMax
 
     /** Puts [pkg] in the dock, in place of [replacing] when the dock is full. */
     fun addToDock(pkg: String, replacing: String? = null, sport: Boolean = false) {
