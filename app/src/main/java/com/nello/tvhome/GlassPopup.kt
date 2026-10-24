@@ -354,6 +354,7 @@ class GlassPopup(private val context: Context, widthDp: Int = 300) {
     }
 
     private fun openSpotlight(screen: View, hero: View, heroWidthDp: Int, heroHeightDp: Int, blur: android.graphics.Bitmap?, source: View?) {
+        NavSound.attach(card)
         // the app on top, its menu right underneath, both centred
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

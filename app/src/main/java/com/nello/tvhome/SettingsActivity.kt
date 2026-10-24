@@ -186,6 +186,7 @@ class SettingsActivity : ComponentActivity() {
             addView(indicator, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(320), dp(100), dp(48), dp(40)) })
         }
         setContentView(root)
+        NavSound.attach(root)
 
         // a soft entrance: everything fades in, the two columns slide in a little
         root.alpha = 0f
@@ -342,6 +343,11 @@ class SettingsActivity : ComponentActivity() {
         }
         row("Modalità notte", if (prefs.night) "Attiva" else "Spenta") {
             prefs.night = !prefs.night
+            build()
+        }
+        row("Suoni di navigazione", if (NavSound.enabled) "Attivi" else "Spenti") {
+            NavSound.enabled = !NavSound.enabled
+            Theme.edit(this).putBoolean("navSounds", NavSound.enabled).apply()
             build()
         }
         header("Salvaschermo")

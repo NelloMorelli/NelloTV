@@ -15,6 +15,7 @@ class NelloApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         Fonts.init(this)
+        NavSound.init(this)
         Net.init(this)
         Thread { Net.trim() }.start()
     }

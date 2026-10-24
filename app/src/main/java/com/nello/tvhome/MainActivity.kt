@@ -258,6 +258,7 @@ class MainActivity : ComponentActivity(), Host {
 
         setupTabs()
         applyTheme()
+        NavSound.attach(window.decorView)
         setupSearch()
         setupTopBar()
         applyPrefs()
@@ -736,6 +737,8 @@ class MainActivity : ComponentActivity(), Host {
             return true
         }
         if (event.action == android.view.KeyEvent.ACTION_DOWN) resetIdle()
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+            (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) NavSound.select()
         if (event.action == android.view.KeyEvent.ACTION_DOWN) userMoved = true
         if (scrollsCatalogs(current) && carousel.hasFocus() &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {

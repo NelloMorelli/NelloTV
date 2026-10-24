@@ -83,6 +83,7 @@ class OnboardingActivity : ComponentActivity() {
             addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL).apply { setMargins(dp(520), dp(72), dp(64), dp(72)) })
         })
         // unfinished (e.g. Home pressed while testing Sportio): continue from the same step
+        NavSound.attach(window.decorView)
         show(prefs.onboardingStep.coerceIn(0, steps.size - 1))
     }
 

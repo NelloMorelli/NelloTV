@@ -68,6 +68,7 @@ abstract class GlassPage : ComponentActivity() {
             addView(indicator, FrameLayout.LayoutParams(dp(560), -1).apply { setMargins(dp(44), dp(22), 0, dp(22)) })
         }
         setContentView(root)
+        NavSound.attach(root)
         from = intent.getParcelableExtra<Rect>(EXTRA_FROM)?.let { RectF(it) }
         open()
     }
