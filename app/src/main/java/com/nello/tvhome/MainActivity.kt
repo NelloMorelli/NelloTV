@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity(), Host {
     private var dockApps: List<String> = emptyList()
     private var themeSig = ""
     private lateinit var catalogDots: CatalogDots
-    private val appNamesSig by lazy { getSharedPreferences("app_names", MODE_PRIVATE).all.toString() }
+    private var appNamesSig = ""
 
     /** Personalizza: what's on screen, card size, hidden tabs. */
     private fun applyTheme() {
@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity(), Host {
         super.onCreate(savedInstanceState)
         Theme.load(this)
         themeSig = Theme.signature(this)
+        appNamesSig = getSharedPreferences("app_names", MODE_PRIVATE).all.toString()
         setContentView(R.layout.activity_main)
         // the background bitmap covers the whole screen: no window background to paint underneath
         window.setBackgroundDrawable(null)
@@ -1617,7 +1618,7 @@ class MainActivity : ComponentActivity(), Host {
 
     /** Esplora's page: top while on the first screen, otherwise keep the focused row near the top. */
     private fun followFocus(v: View?) {
-        if (v == null || !hasBelow(current)) return
+        if (v == null || !hasBelow(current) || rebuildingGrid) return
         if (!isInside(v, below)) {
             if (page.scrollY != 0) page.glideTo(0)
             return
@@ -2215,65 +2216,24 @@ class MainActivity : ComponentActivity(), Host {
         p.button("Apri") { onAppClicked(app) }
         val inGrid = bentoTiles().any { it.tag == app.pkg }
         if (inDock || inGrid) p.button("Sposta") { startMove(app, inDock) }
-        if (inDock) {
-            p.button("Rimuovi dal dock") {
+        if (app.pkg != Apps.SETTINGS) {
+            if (inDock) p.button("Togli dal dock") {
                 apps.removeFromDock(app.pkg, sportDock)
-                toast("${app.label} rimossa dal dock")
+                toast("${app.label} tolta dal dock")
                 refreshDock(app.label)
-            }
-        } else if (app.pkg != Apps.SETTINGS) {
-            p.button(if (apps.dockFull(sportDock)) "Metti nel dock al posto di…" else "Aggiungi al dock") {
+            } else p.button(if (apps.dockFull(sportDock)) "Metti nel dock al posto di…" else "Aggiungi al dock") {
                 if (!apps.dockFull(sportDock)) {
                     apps.addToDock(app.pkg, sport = sportDock)
-                    toast("${app.label} aggiunta al dock")
+                    toast("${app.label} nel dock")
                     refreshDock(app.label)
                 } else replaceInDock(app)
             }
-        }
-        // the Sport tab's app grid, editable from anywhere
-        if (app.pkg != Apps.SETTINGS) {
-            val inSport = app.pkg in apps.sportApps
-            p.button(if (inSport) "Rimuovi da App sport" else "Aggiungi ad App sport") {
-                val gridIndex = bentoTiles().indexOfFirst { it.contentDescription == app.label }
-                apps.sportApps = if (inSport) apps.sportApps - app.pkg else apps.sportApps + app.pkg
-                toast(if (inSport) "${app.label} rimossa da App sport" else "${app.label} aggiunta ad App sport")
-                refreshSportApps(keepFocusAt = gridIndex)
+            p.button("Personalizza…") { customizeApp(app, inGrid) }
+            p.button("Nascondi") {
+                apps.hide(app.pkg)
+                toast("${app.label} nascosta · la trovi in \"App nascoste\"")
+                rebuildExplore()
             }
-        }
-        if (app.pkg != Apps.SETTINGS) {
-            val folder = collections.folderOf(app.pkg)
-            if (folder != null) p.button("Togli da \"${folder.name}\"") {
-                collections.removeFromFolder(app.pkg)
-                openFolderPopup?.dismiss()
-                toast("${app.label} tolta dalla cartella")
-                refreshGrid(app.pkg)
-            } else p.button("Metti in una cartella…") { chooseFolder(app) }
-            p.button("Aggiungi a una riga…") { chooseRow(app) }
-        }
-        if (inGrid && current != Section.SPORT) {
-            val size = apps.tileSize(app.pkg)
-            p.button(when (size) { "big" -> "Dimensione: grande"; "small" -> "Dimensione: piccola"; else -> "Dimensione: automatica" }) {
-                val next = when (size) { "auto" -> "big"; "big" -> "small"; else -> "auto" }
-                apps.setTileSize(app.pkg, next)
-                toast(when (next) { "big" -> "${app.label} grande"; "small" -> "${app.label} piccola"; else -> "${app.label}: dimensione automatica" })
-                refreshGrid(app.pkg)
-            }
-        }
-        if (app.pkg != Apps.SETTINGS) {
-            p.button("Cambia immagine…") {
-                imageFor = app.pkg
-                openPage(Intent(this, WallpaperPickerActivity::class.java).putExtra(WallpaperPickerActivity.EXTRA_APP, app.pkg).putExtra(WallpaperPickerActivity.EXTRA_APP_NAME, app.label))
-            }
-            if (apps.hasCustomImage(app.pkg)) p.button("Immagine originale") {
-                apps.clearCustomImage(app.pkg)
-                imageFor = app.pkg
-                appImagesChanged()
-            }
-        }
-        if (app.pkg != Apps.SETTINGS) p.button("Nascondi app") {
-            apps.hide(app.pkg)
-            toast("${app.label} nascosta · la trovi in \"App nascoste\"")
-            rebuildExplore()
         }
         p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
     }
@@ -2352,12 +2312,16 @@ class MainActivity : ComponentActivity(), Host {
         val order = flat.toMutableList().apply { add(target, removeAt(from)) }
         if (current == Section.SPORT) {
             apps.sportApps = order.filter { !it.startsWith(Collections.FOLDER) && it != Apps.HIDDEN_TILE }
-            refreshSportApps()
+            val state = states[Section.SPORT]
+            state?.rows?.firstOrNull { it.key == "sport_apps" }?.apps = apps.get(apps.sportApps)
+            shownBento = null
+            if (state != null) rebuildInPlace(m.pkg) { bindBelow(state) }
         } else {
             apps.gridCustom = order
             refreshGrid(m.pkg)
         }
-        window.decorView.postDelayed({ liftMoving(true) }, 260)
+        // the new tile appears already lifted, no drop-and-lift
+        movingView()?.let { v -> v.animate().cancel(); v.scaleX = 1.14f; v.scaleY = 1.14f; v.translationY = -8 * resources.displayMetrics.density; v.elevation = 24 * resources.displayMetrics.density }
         return true
     }
 
@@ -2373,6 +2337,50 @@ class MainActivity : ComponentActivity(), Host {
     private var imageFor: String? = null
     private var seenImages = 0L
     private var seenGridKey: String? = null
+
+    /** "Personalizza…": everything about how an app looks and where it lives, in one place. */
+    private fun customizeApp(app: AppInfo, inGrid: Boolean) {
+        val p = popup().title(app.label, "Personalizza")
+        p.button("Rinomina") {
+            askText("Nome dell'app", app.label) { name ->
+                getSharedPreferences("app_names", MODE_PRIVATE).edit().putString(app.pkg, name).apply()
+                appNamesSig = getSharedPreferences("app_names", MODE_PRIVATE).all.toString()
+                imageFor = app.pkg
+                appImagesChanged()
+            }
+        }
+        p.button("Cambia immagine…") {
+            imageFor = app.pkg
+            openPage(Intent(this, WallpaperPickerActivity::class.java).putExtra(WallpaperPickerActivity.EXTRA_APP, app.pkg).putExtra(WallpaperPickerActivity.EXTRA_APP_NAME, app.label))
+        }
+        if (apps.hasCustomImage(app.pkg)) p.button("Immagine originale") {
+            apps.clearCustomImage(app.pkg)
+            imageFor = app.pkg
+            appImagesChanged()
+        }
+        if (inGrid && current != Section.SPORT) {
+            val size = apps.tileSize(app.pkg)
+            p.button("Dimensione · " + when (size) { "big" -> "grande"; "small" -> "piccola"; else -> "automatica" }) {
+                val next = when (size) { "auto" -> "big"; "big" -> "small"; else -> "auto" }
+                apps.setTileSize(app.pkg, next)
+                refreshGrid(app.pkg)
+            }
+        }
+        val folder = collections.folderOf(app.pkg)
+        if (folder != null) p.button("Togli da \"${folder.name}\"") {
+            collections.removeFromFolder(app.pkg)
+            openFolderPopup?.dismiss()
+            refreshGrid(app.pkg)
+        } else p.button("Metti in una cartella…") { chooseFolder(app) }
+        p.button("Aggiungi a una riga…") { chooseRow(app) }
+        val inSport = app.pkg in apps.sportApps
+        p.button(if (inSport) "Togli da App sport" else "Aggiungi ad App sport") {
+            apps.sportApps = if (inSport) apps.sportApps - app.pkg else apps.sportApps + app.pkg
+            toast(if (inSport) "${app.label} tolta da App sport" else "${app.label} in App sport")
+            refreshSportApps()
+        }
+        p.showSpotlight(page, appHero(app), 272, 153, spotlightSource)
+    }
 
     /** Update the Sport tab's "App sport" grid in place. */
     private fun bentoTiles(): List<View> =
@@ -2538,10 +2546,23 @@ class MainActivity : ComponentActivity(), Host {
         shownBento = null
         shownCustomRows = null
         if (current != Section.EXPLORE) return
-        bindBelow(state)
-        if (focusKey != null) bento.postDelayed({
-            bentoTiles().firstOrNull { it.tag == focusKey }?.requestFocus()
-        }, 200)
+        rebuildInPlace(focusKey) { bindBelow(state) }
+    }
+
+    private var rebuildingGrid = false
+
+    /**
+     * Rebuild the grid without the page moving: the focus waits on the grid itself (not on a tab,
+     * which would scroll the page up) and goes straight back to [focusKey] in the new tiles.
+     */
+    private fun rebuildInPlace(focusKey: String?, rebuild: () -> Unit) {
+        val hadFocus = isInside(currentFocus ?: page, bento)
+        rebuildingGrid = true
+        if (hadFocus) { bento.isFocusable = true; bento.requestFocus() }
+        rebuild()
+        if (focusKey != null) bentoTiles().firstOrNull { it.tag == focusKey }?.requestFocus()
+        bento.isFocusable = false
+        bento.post { rebuildingGrid = false }
     }
 
     /** A small pop-up with a text field (names of folders and rows). */

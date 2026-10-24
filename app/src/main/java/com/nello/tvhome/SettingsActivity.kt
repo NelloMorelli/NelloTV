@@ -507,17 +507,13 @@ class SettingsActivity : ComponentActivity() {
         row("Dock", "${apps.get(apps.dock()).size}/${apps.dockMax} app") { reorderFavourites(it) }
         row("Dock Sport", "${apps.get(apps.dock(true)).size}/${apps.dockMax} app") { reorderFavourites(it, sport = true) }
         header("Aspetto del dock")
-        val counts = listOf(4, 5, 6, 7)
-        row("App nel dock", "${apps.dockMax}") { v ->
-            pick(v, "App nel dock", counts.map { "$it app" }, counts.indexOf(apps.dockMax)) { i ->
-                apps.dockMax = counts[i]
-                // fewer places: the extra apps leave the dock
-                apps.setDock(apps.dock(false)); apps.setDock(apps.dock(true), true)
-            }
-        }
         val scales = listOf(0.85f to "Piccole", 1f to "Normali", 1.15f to "Grandi")
         row("Dimensione delle app", scales.firstOrNull { it.first == apps.dockScale }?.second ?: "Normali") { v ->
-            pick(v, "Dimensione delle app nel dock", scales.map { it.second }, scales.indexOfFirst { it.first == apps.dockScale }) { i -> apps.dockScale = scales[i].first }
+            pick(v, "Dimensione delle app nel dock", scales.map { "${it.second} · fino a ${apps.dockMaxFor(it.first)} app" }, scales.indexOfFirst { it.first == apps.dockScale }) { i ->
+                apps.dockScale = scales[i].first
+                // bigger tiles hold fewer apps: the extra ones leave the dock
+                apps.setDock(apps.dock(false)); apps.setDock(apps.dock(true), true)
+            }
         }
         row("Nomi sulle app", if (apps.dockLabels) "Sì" else "No") { apps.dockLabels = !apps.dockLabels; build() }
         header("Griglia delle app")
@@ -528,15 +524,13 @@ class SettingsActivity : ComponentActivity() {
                 apps.gridOrder = orders[i].first
             }
         }
-        note("Personalizzato: tieni premuto OK su un'app e scegli Sposta. Lì puoi anche renderla grande o piccola e cambiarle l'immagine.")
+        note("Tieni premuto OK su un'app: Sposta per metterla dove vuoi, Personalizza per nome, immagine, dimensione, cartella e righe.")
         header("Righe e cartelle")
         val col = Collections(this)
         row("Le tue righe", col.rows.size.let { if (it == 0) "Nessuna" else "$it in Esplora" }) { v -> customRows(v) }
         row("Cartelle", col.folders.size.let { if (it == 0) "Nessuna" else "$it" }) { v -> folders(v) }
-        note("Per mettere un'app in una riga o in una cartella: tieni premuto OK sull'app nella home.")
         header("App")
         row("App nascoste", apps.hiddenApps().size.let { if (it == 0) "Nessuna" else "$it app" }) { hiddenApps(it) }
-        row("Rinomina un'app", "›") { v -> renamePick(v) }
         val names = getSharedPreferences("app_names", MODE_PRIVATE).all
         if (names.isNotEmpty()) row("Ripristina i nomi originali", "${names.size} app") {
             getSharedPreferences("app_names", MODE_PRIVATE).edit().clear().apply()

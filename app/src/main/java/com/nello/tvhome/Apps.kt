@@ -143,8 +143,9 @@ class Apps(private val context: Context) {
                     pkg = pkg,
                     // a name chosen in Personalizza wins
                     label = names.getString(pkg, null) ?: ri.loadLabel(pm).toString(),
-                    // your own image wins over the app's banner
-                    banner = custom ?: ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm),
+                    // your own image wins over the app's banner; no banner: a cover in the icon's colours
+                    banner = custom ?: ai.loadBanner(pm) ?: ai.applicationInfo.loadBanner(pm)
+                        ?: ThemedTile.get(context, pkg, names.getString(pkg, null) ?: ri.loadLabel(pm).toString(), ri.loadIcon(pm)),
                     icon = ri.loadIcon(pm),
                 )
             }
@@ -231,10 +232,19 @@ class Apps(private val context: Context) {
 
     // ---------------------------------------------------------------- dock options
 
-    /** how many apps the dock holds (4–7) */
-    var dockMax: Int
-        get() = prefs.getInt("dockMax", DOCK_MAX)
-        set(v) = prefs.edit().putInt("dockMax", v.coerceIn(4, 7)).apply()
+    /**
+     * How many apps fill the dock: as many tiles as fit across it (screen minus the page margins
+     * and the dock's padding) with at least the grid's gap between them — 7 at normal size.
+     */
+    val dockMax: Int get() = dockMaxFor(dockScale)
+
+    fun dockMaxFor(scale: Float): Int {
+        val d = context.resources.displayMetrics.density
+        val inner = context.resources.displayMetrics.widthPixels - 2 * (44 + 14) * d
+        val tile = 128 * scale * d
+        val gap = 14 * d
+        return ((inner + gap) / (tile + gap)).toInt().coerceIn(3, 9)
+    }
     /** dock tile size: 0.85 small, 1 normal, 1.15 large */
     var dockScale: Float
         get() = prefs.getFloat("dockScale", 1f)
