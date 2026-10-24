@@ -217,7 +217,22 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
     private var directTarget: View? = null
     private val savedColors = java.util.WeakHashMap<android.widget.TextView, Int>()
 
+    /** icon bars: each icon goes dark natively as the pill covers it (no mask, colours kept) */
+    private fun iconInk() {
+        val k = strength * visibleAmount
+        for (b in buttons()) {
+            val icons = if (b is ViewGroup) (0 until b.childCount).map { b.getChildAt(it) }.filterIsInstance<StatusIcon>() else emptyList()
+            if (icons.isEmpty()) continue
+            val overlap = (minOf(pill.right, b.right.toFloat()) - maxOf(pill.left, b.left.toFloat())).coerceAtLeast(0f)
+            val cover = (overlap / b.width.coerceAtLeast(1)).coerceIn(0f, 1f)
+            icons.forEach { it.ink = cover * k }
+        }
+    }
+
+    private val hasLabels get() = buttons().any { it is android.widget.TextView }
+
     private fun updateInk() {
+        if (!hasLabels) { iconInk(); return }
         val settled = !animator.isRunning && strength * visibleAmount > 0.99f
         val target = if (settled) lastTarget else null
         if (target === directTarget) return
@@ -282,7 +297,7 @@ class FocusGroup @JvmOverloads constructor(context: Context, attrs: AttributeSet
         // the labels again, dark, but only inside the white pill: as it slides, each letter turns
         // dark exactly where the pill covers it
         val ink = strength * visibleAmount
-        if (showPill && ink > 0.01f && directTarget == null) {
+        if (showPill && ink > 0.01f && directTarget == null && hasLabels) {
             inkFilter()
             inkPaint.alpha = (ink * 255).toInt()
             clip.reset()
